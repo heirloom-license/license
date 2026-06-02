@@ -1,0 +1,13 @@
+# Source of truth for the Heirloom License adopters directory.
+# ADOPTERS.md and site/adopters.json are GENERATED from this file — don't edit them by hand.
+# Add entries via the issue form (preferred) or a PR here.
+adopters:
+  - name: Memophant
+    product_url: ""
+    repo: ""                 # private until Sunset
+    description: "Indie macOS app — the first Heirloom License adopter."
+    variant: HL-1.0-MPL2.0-12mo
+    logo: ""
+    added: "2026-06-02"
+    status: upcoming         # live | upcoming
+    verified: false

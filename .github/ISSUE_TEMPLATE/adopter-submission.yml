@@ -1,0 +1,63 @@
+name: Adopter submission
+description: Add your app to the Heirloom License adopters directory
+title: "[Adopter] <your product name>"
+labels: ["adopter-submission"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for adopting the Heirloom License! Fill this in and our bot will
+        verify your badge and open a pull request automatically.
+
+        **Before you submit:** the Heirloom badge (a link to https://heirloomlicense.org)
+        must be visible on your product's public page. That link is what we verify.
+  - type: input
+    id: name
+    attributes:
+      label: Product name
+    validations:
+      required: true
+  - type: input
+    id: product_url
+    attributes:
+      label: Product URL
+      description: A public page that displays the Heirloom badge linking to heirloomlicense.org
+      placeholder: https://yourapp.com
+    validations:
+      required: true
+  - type: input
+    id: repo
+    attributes:
+      label: Repository URL
+      description: Optional — leave blank if your repo is private (it usually is)
+  - type: textarea
+    id: description
+    attributes:
+      label: Short description
+      description: One sentence about your app.
+    validations:
+      required: true
+  - type: dropdown
+    id: variant
+    attributes:
+      label: License variant
+      options:
+        - HL-1.0-MPL2.0-12mo
+        - HL-1.0-MPL2.0-24mo
+        - HL-1.0-GPL3.0-12mo
+        - HL-1.0-AGPL3.0-12mo
+        - Other (note in description)
+    validations:
+      required: true
+  - type: input
+    id: logo
+    attributes:
+      label: Logo URL
+      description: Optional — a square PNG or SVG for the directory card
+  - type: checkboxes
+    id: confirm
+    attributes:
+      label: Confirmation
+      options:
+        - label: My product is released under an unmodified Heirloom License, and the badge is visible on the Product URL above.
+          required: true

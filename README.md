@@ -48,7 +48,7 @@ Read the [plain-English summary](SUMMARY.md) or the [full license](LICENSE.md).
 
 Full walkthrough (with safe testing and hardening): **[SETUP.md](SETUP.md)**.
 
-Then add yourself to [`ADOPTERS.md`](ADOPTERS.md).
+Then [submit your app](https://github.com/heirloom-license/license/issues/new?template=adopter-submission.yml) to the **[adopters directory](https://heirloomlicense.org/adopters)** — the bot verifies your badge and opens the PR.
 
 ## The identifier convention
 
@@ -72,7 +72,8 @@ heirloom-license/
 ├── SUMMARY.md                 Plain-English explanation
 ├── README.md                  This file
 ├── SETUP.md                   Step-by-step dead-man's switch setup guide
-├── ADOPTERS.md                Public list of apps using the license
+├── adopters.yml               Source of truth for the adopters directory
+├── ADOPTERS.md                Generated adopters table (do not edit by hand)
 ├── LEGAL-REVIEW.md            What still needs a lawyer, and open questions
 ├── ROADMAP.md                 Website, funding, launch, governance plan
 ├── badges/                    SVG badge + usage rules

@@ -1,11 +1,11 @@
 # Adopters
 
-Software released under the Heirloom License. Open a PR to add yours.
+Software released under the Heirloom License. **Want to be listed?** [Submit your app](https://github.com/heirloom-license/license/issues/new?template=adopter-submission.yml) — fill the form, our bot verifies your badge and opens a PR.
 
-| Product | Developer | Variant | Repository |
-|---|---|---|---|
-| _your app here_ | Alan (Wizemann) | `HL-1.0-MPL2.0-12mo` | _link_ |
+Live directory: **https://heirloomlicense.org/adopters**
 
-To be listed, your product must be released under an **unmodified** version of
-the Heirloom License and have the dead-man's-switch (or an equivalent
-publish-on-dormancy mechanism) in place.
+| Product | Variant | Status | Verified | Link |
+|---|---|---|---|---|
+| **Memophant** | `HL-1.0-MPL2.0-12mo` | Upcoming | — | — |
+
+*Generated from [`adopters.yml`](adopters.yml) — do not edit by hand.*
