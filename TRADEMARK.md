@@ -13,7 +13,8 @@ the Business Source License and the Functional Source License.
 - The **Heirloom badge** (the artwork in `badges/`).
 
 These are marks of the Heirloom License project. They are **not** licensed under
-CC0.
+CC0. The project asserts common-law rights and uses the ™ symbol; the marks are
+not yet federally registered (see Registration below).
 
 ## Permitted uses (no permission needed)
 

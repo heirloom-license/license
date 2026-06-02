@@ -2,7 +2,7 @@
   <img src="badges/heirloom-badge.svg" alt="Heirloom License" height="40">
 </p>
 
-<h1 align="center">The Heirloom License</h1>
+<h1 align="center">The Heirloom License™</h1>
 
 <p align="center">
   <em>Commercial software that outlives its maker.</em><br>
