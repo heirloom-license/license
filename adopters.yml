@@ -2,7 +2,7 @@ adopters:
 - name: Memophant
   product_url: https://memophant.co
   repo: ''
-  description: Indie macOS app — the first Heirloom License adopter.
+  description: A native macOS command center for repo-resident AI project memory. Captures what your AI coding sessions learn, keeps it in your repo, hands it back to the next session.
   variant: HL-1.0-MPL2.0-12mo
   logo: ''
   added: '2026-06-02'
