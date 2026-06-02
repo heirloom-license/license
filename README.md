@@ -46,6 +46,8 @@ Read the [plain-English summary](SUMMARY.md) or the [full license](LICENSE.md).
 4. **Show the badge.** Add the [badge](badges/) to your README and About box so
    buyers can see the promise.
 
+Full walkthrough (with safe testing and hardening): **[SETUP.md](SETUP.md)**.
+
 Then add yourself to [`ADOPTERS.md`](ADOPTERS.md).
 
 ## The identifier convention
@@ -69,6 +71,7 @@ heirloom-license/
 ├── LICENSE.md                 The license text v1.0 (parameterized)
 ├── SUMMARY.md                 Plain-English explanation
 ├── README.md                  This file
+├── SETUP.md                   Step-by-step dead-man's switch setup guide
 ├── ADOPTERS.md                Public list of apps using the license
 ├── LEGAL-REVIEW.md            What still needs a lawyer, and open questions
 ├── ROADMAP.md                 Website, funding, launch, governance plan
