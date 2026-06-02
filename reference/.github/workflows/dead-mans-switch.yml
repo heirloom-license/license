@@ -10,7 +10,7 @@
 #       Administration: Read & Write   (needed to flip visibility)
 #       Contents:       Read & Write   (needed to swap the LICENSE)
 #       Issues:         Read & Write   (announcement issue)
-#    Store it as a repo secret named  CONTINUITY_PAT
+#    Store it as a repo secret named  HEIRLOOM_PAT
 #    (The default GITHUB_TOKEN cannot change repository visibility.)
 # 3. Set DORMANCY_DAYS below to match your license variant (365 = 12 months).
 # 4. Stay alive simply by committing as normal, OR run this workflow manually
@@ -62,7 +62,7 @@ jobs:
         if: github.event_name == 'schedule'
         id: measure
         env:
-          GH_TOKEN: ${{ secrets.CONTINUITY_PAT }}
+          GH_TOKEN: ${{ secrets.HEIRLOOM_PAT }}
         run: |
           set -euo pipefail
           # Most recent maintenance signal = latest commit date on default branch.
@@ -83,7 +83,7 @@ jobs:
       - name: Sunset — publish repo and swap license
         if: steps.measure.outputs.dormant == 'true'
         env:
-          GH_TOKEN: ${{ secrets.CONTINUITY_PAT }}
+          GH_TOKEN: ${{ secrets.HEIRLOOM_PAT }}
           REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
