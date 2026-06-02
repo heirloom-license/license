@@ -1,0 +1,110 @@
+# Heirloom License — Dead-Man's Switch (reference implementation)
+#
+# Purpose: if the maintainer goes dormant for DORMANCY_DAYS, this workflow
+# publishes the private repository and swaps in the Change License, fulfilling
+# the Sunset obligation in the Heirloom License automatically.
+#
+# ── Setup ────────────────────────────────────────────────────────────────────
+# 1. This repo should be PRIVATE while you maintain it.
+# 2. Create a fine-grained Personal Access Token with, for THIS repo:
+#       Administration: Read & Write   (needed to flip visibility)
+#       Contents:       Read & Write   (needed to swap the LICENSE)
+#       Issues:         Read & Write   (announcement issue)
+#    Store it as a repo secret named  CONTINUITY_PAT
+#    (The default GITHUB_TOKEN cannot change repository visibility.)
+# 3. Set DORMANCY_DAYS below to match your license variant (365 = 12 months).
+# 4. Stay alive simply by committing as normal, OR run this workflow manually
+#    (Actions ▸ Dead-Man's Switch ▸ Run workflow) to write a heartbeat.
+#
+# ── Honesty note ─────────────────────────────────────────────────────────────
+# This automation is a good-faith delivery mechanism. It can be defeated by
+# deleting the account or disabling Actions before disappearing. The binding
+# promise is the license text itself (Section 6); this just performs it.
+
+name: Heirloom Dead-Man's Switch
+
+on:
+  schedule:
+    - cron: "0 9 * * 1"      # every Monday 09:00 UTC
+  workflow_dispatch:          # manual run = heartbeat / dry-run
+
+permissions:
+  contents: write
+  issues: write
+
+env:
+  DORMANCY_DAYS: "365"                 # match your variant (12mo = 365)
+  CHANGE_LICENSE_SPDX: "MPL-2.0"
+  CHANGE_LICENSE_URL: "https://www.mozilla.org/media/MPL/2.0/index.txt"
+
+jobs:
+  heartbeat-or-sunset:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # A manual run is treated as an explicit heartbeat: record it and stop.
+      - name: Record heartbeat (manual runs only)
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          date -u +"%Y-%m-%dT%H:%M:%SZ" > HEARTBEAT
+          git config user.name  "heirloom-bot"
+          git config user.email "bot@heirloomlicense.org"
+          git add HEARTBEAT
+          git commit -m "chore: heartbeat" || echo "no change"
+          git push || echo "nothing to push"
+          echo "Heartbeat recorded. Dormancy clock reset."
+
+      - name: Measure dormancy
+        if: github.event_name == 'schedule'
+        id: measure
+        env:
+          GH_TOKEN: ${{ secrets.CONTINUITY_PAT }}
+        run: |
+          set -euo pipefail
+          # Most recent maintenance signal = latest commit date on default branch.
+          LAST=$(git log -1 --format=%cI)
+          LAST_EPOCH=$(date -u -d "$LAST" +%s)
+          NOW_EPOCH=$(date -u +%s)
+          DAYS=$(( (NOW_EPOCH - LAST_EPOCH) / 86400 ))
+          echo "Last maintenance signal: $LAST  (${DAYS} days ago)"
+          echo "days=$DAYS" >> "$GITHUB_OUTPUT"
+          if [ "$DAYS" -ge "${DORMANCY_DAYS}" ]; then
+            echo "dormant=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "dormant=false" >> "$GITHUB_OUTPUT"
+            echo "Not dormant. ${DAYS}/${DORMANCY_DAYS} days. No action."
+          fi
+
+      # ── SUNSET ────────────────────────────────────────────────────────────
+      - name: Sunset — publish repo and swap license
+        if: steps.measure.outputs.dormant == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.CONTINUITY_PAT }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          echo "Dormancy window exceeded. Executing Sunset."
+
+          # 1. Fetch the Change License text and replace LICENSE.
+          curl -fsSL "${CHANGE_LICENSE_URL}" -o LICENSE
+          echo "" >> LICENSE
+          echo "This software Sunset under the Heirloom License v1.0 on $(date -u +%Y-%m-%d)" >> LICENSE
+          echo "and is now governed by ${CHANGE_LICENSE_SPDX}. This grant is irrevocable." >> LICENSE
+
+          git config user.name  "heirloom-bot"
+          git config user.email "bot@heirloomlicense.org"
+          git add LICENSE
+          git commit -m "Sunset: relicense under ${CHANGE_LICENSE_SPDX} (Heirloom License)" || echo "no change"
+          git push || echo "nothing to push"
+
+          # 2. Make the repository public.
+          gh api -X PATCH "repos/${REPO}" -f visibility=public -F private=false
+
+          # 3. Announce.
+          gh issue create \
+            --title "This project has Sunset and is now open source (${CHANGE_LICENSE_SPDX})" \
+            --body "Under the Heirloom License v1.0, this project entered the Sunset state after ${DORMANCY_DAYS} days of dormancy. The full source is now public and irrevocably licensed under ${CHANGE_LICENSE_SPDX}. The community is free to fork, fix, and continue it. See https://heirloomlicense.org"

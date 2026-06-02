@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Heirloom License — software that outlives its maker</title>
+<meta name="description" content="A commercial software license that automatically becomes open source if the developer abandons it.">
+<style>
+  :root{
+    --bg:#0d1117; --panel:#161b22; --line:#283039;
+    --ink:#e6edf3; --muted:#9aa7b4; --accent:#0a7d4b; --accent2:#1f9d63;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    background:var(--bg);color:var(--ink)}
+  a{color:var(--accent2);text-decoration:none}
+  a:hover{text-decoration:underline}
+  .wrap{max-width:820px;margin:0 auto;padding:0 24px}
+  header{padding:88px 0 56px;text-align:center}
+  .badge{display:inline-block;font-size:12px;letter-spacing:.08em;text-transform:uppercase;
+    color:var(--accent2);border:1px solid var(--accent);border-radius:999px;padding:5px 14px;margin-bottom:26px}
+  h1{font-size:44px;line-height:1.1;margin:0 0 16px;letter-spacing:-.02em}
+  .tag{font-size:20px;color:var(--muted);max-width:600px;margin:0 auto}
+  .cta{margin-top:34px;display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+  .btn{padding:11px 20px;border-radius:8px;font-weight:600;font-size:15px}
+  .btn.primary{background:var(--accent);color:#fff}
+  .btn.ghost{border:1px solid var(--line);color:var(--ink)}
+  section{padding:40px 0;border-top:1px solid var(--line)}
+  h2{font-size:24px;margin:0 0 20px;letter-spacing:-.01em}
+  .steps{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:20px}
+  .card h3{margin:0 0 8px;font-size:15px;color:var(--accent2)}
+  .card p{margin:0;color:var(--muted);font-size:14px}
+  .state{font-size:13px;color:var(--accent2);font-weight:600;text-transform:uppercase;letter-spacing:.06em}
+  code{background:#11161d;border:1px solid var(--line);border-radius:5px;padding:2px 7px;font-size:13px;color:#d6e3ee}
+  ul.clean{list-style:none;padding:0}
+  ul.clean li{padding:10px 0;border-bottom:1px solid var(--line);color:var(--muted)}
+  ul.clean li b{color:var(--ink)}
+  footer{padding:48px 0 72px;color:var(--muted);font-size:14px;text-align:center}
+  @media(max-width:640px){.steps{grid-template-columns:1fr}h1{font-size:34px}}
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <span class="badge">License: Heirloom 1.0</span>
+    <h1>Commercial software that outlives its maker.</h1>
+    <p class="tag">A paid-software license with a binding promise: if the developer
+      abandons it, the source code becomes open to everyone — automatically and
+      permanently.</p>
+    <div class="cta">
+      <a class="btn primary" href="https://github.com/heirloom-license/license">Get the license</a>
+      <a class="btn ghost" href="#how">How it works</a>
+    </div>
+  </div>
+</header>
+
+<section id="how">
+  <div class="wrap">
+    <h2>How it works</h2>
+    <div class="steps">
+      <div class="card">
+        <div class="state">While active</div>
+        <h3>A normal paid product</h3>
+        <p>Buy it, use it, run it. You can't resell it or build a competitor from
+          it. Business as usual.</p>
+      </div>
+      <div class="card">
+        <div class="state">If abandoned</div>
+        <h3>The dormancy trigger</h3>
+        <p>No update and no support response for the dormancy window (default 12
+          months). Objective — no committee, no court.</p>
+      </div>
+      <div class="card">
+        <div class="state">Forever after</div>
+        <h3>It Sunsets open</h3>
+        <p>Full source published publicly under a strong copyleft license
+          (default MPL-2.0). Irrevocable. The community keeps it alive.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2>Why it's different</h2>
+    <ul class="clean">
+      <li><b>Not a fixed date.</b> Unlike the Business Source and Functional Source
+        licenses, it converts on <i>abandonment</i>, not a calendar date — detected
+        by a dead-man's switch.</li>
+      <li><b>Stays open for good.</b> Copyleft on Sunset means nobody can re-privatize
+        the abandoned code. Not MIT — the commons keeps growing.</li>
+      <li><b>Costs the developer nothing</b> while they're active, and earns buyer
+        trust on day one.</li>
+      <li><b>Self-serve.</b> Pick three parameters, drop in the workflow, show the
+        badge: <code>HL-1.0-MPL2.0-12mo</code>.</li>
+    </ul>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2>Adopt it</h2>
+    <p style="color:var(--muted)">Add the license, set your Change License, dormancy
+      window, and repo, install the reference dead-man's switch, and display the
+      badge. Then add your app to the wall.</p>
+    <div class="cta" style="justify-content:flex-start">
+      <a class="btn primary" href="https://github.com/heirloom-license/license#adopt-it-in-four-steps">Adoption guide</a>
+      <a class="btn ghost" href="https://github.com/heirloom-license/license/blob/main/SUMMARY.md">Plain-English summary</a>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    The Heirloom License text is dedicated to the public domain (CC0 1.0).<br>
+    <code>v1.0-draft</code> — pending legal review. Not legal advice.
+  </div>
+</footer>
+</body>
+</html>
