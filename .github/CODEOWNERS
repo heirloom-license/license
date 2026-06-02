@@ -1,0 +1,6 @@
+# Default owner for everything in the repo
+* @awizemann
+
+# The adopters registry and license text — protect from accidental edits
+/adopters.yml   @awizemann
+/LICENSE.md     @awizemann
