@@ -69,6 +69,8 @@ Examples:
 ```
 heirloom-license/
 ├── LICENSE.md                 The license text v1.0 (parameterized)
+├── NOTICE                     Short copyright + trademark notice
+├── TRADEMARK.md               Marks policy (name + badge)
 ├── SUMMARY.md                 Plain-English explanation
 ├── README.md                  This file
 ├── SETUP.md                   Step-by-step dead-man's switch setup guide
@@ -92,7 +94,7 @@ The Heirloom License text itself is dedicated to the public domain under
 [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/). Copy it, adopt it,
 fork it. The **"Heirloom License" name and badge** are project marks — use them
 only for software released under an unmodified version of the license, so the
-badge keeps meaning one specific thing.
+badge keeps meaning one specific thing. Full policy: [`TRADEMARK.md`](TRADEMARK.md) and [`NOTICE`](NOTICE).
 
 ## Status
 

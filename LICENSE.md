@@ -174,6 +174,19 @@ If any provision of this license is held unenforceable, the remaining
 provisions remain in effect. This license does not create any agency,
 partnership, or joint venture. Headings are for convenience only.
 
+## 12. Name and Marks
+
+The text of this license is dedicated to the public domain (CC0 1.0) and may be
+copied and modified freely. The name "Heirloom License", the "Heirloom" name as
+applied to this license, and the Heirloom badge are marks of the Heirloom License
+project and are **not** dedicated to the public domain.
+
+You may use the name "Heirloom License" and the badge only to identify software
+released under an unmodified, published version of this license. Any modified
+version of this license must be distributed under a **different name** and must
+not use the "Heirloom" name or the badge in any manner likely to cause confusion
+as to the terms that apply. See `TRADEMARK.md`.
+
 ---
 
 *The Heirloom License is published at `<Source Repository of the license
