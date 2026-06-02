@@ -27,4 +27,3 @@ jobs:
             git commit -m "chore: rebuild adopters directory"
             git push origin HEAD:main
           fi
-          curl -sS "https://purge.jsdelivr.net/gh/heirloom-license/license@main/site/adopters.json" || true

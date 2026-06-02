@@ -66,7 +66,7 @@
   </div>
 </footer>
 <script>
-const DATA_URL="https://cdn.jsdelivr.net/gh/heirloom-license/license@main/site/adopters.json";
+const DATA_URL="https://raw.githubusercontent.com/heirloom-license/license/main/site/adopters.json";
 const grid=document.getElementById("grid"),stateEl=document.getElementById("state"),countEl=document.getElementById("count"),q=document.getElementById("q");
 let all=[];
 function initials(n){return n.split(/\s+/).map(w=>w[0]).join("").slice(0,2).toUpperCase();}
@@ -107,7 +107,7 @@ document.addEventListener("click",e=>{
     highlightHash();}
 });
 window.addEventListener("hashchange",highlightHash);
-fetch(DATA_URL).then(r=>r.json()).then(d=>{all=d.adopters||[];render(all);})
+fetch(DATA_URL+"?t="+Date.now()).then(r=>r.json()).then(d=>{all=d.adopters||[];render(all);})
   .catch(()=>{stateEl.innerHTML='Couldn\'t load the directory right now. View it on <a href="https://github.com/heirloom-license/license/blob/main/ADOPTERS.md">GitHub</a>.';});
 q.addEventListener("input",()=>{const t=q.value.toLowerCase().trim();render(!t?all:all.filter(a=>(a.name+" "+a.description+" "+a.variant).toLowerCase().includes(t)));});
 </script>
