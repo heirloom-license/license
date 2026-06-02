@@ -10,18 +10,21 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.x'
-      - run: pip install pyyaml
-      - run: python scripts/build_adopters.py
-      - name: Commit regenerated directory
+      - name: Rebuild directory and purge cache
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
         run: |
+          set -e
+          git clone --depth 1 "https://x-access-token:${GH_TOKEN}@github.com/${REPO}" repo
+          cd repo
+          python3 -m pip install pyyaml --break-system-packages -q || python3 -m pip install pyyaml -q
+          python3 scripts/build_adopters.py
           git config user.name heirloom-bot
           git config user.email bot@heirloomlicense.org
           git add ADOPTERS.md site/adopters.json
-          git diff --cached --quiet || git commit -m "chore: rebuild adopters directory"
-          git push
-      - name: Purge jsDelivr cache so the site sees new data
-        run: curl -sS "https://purge.jsdelivr.net/gh/heirloom-license/license@main/site/adopters.json" || true
+          if ! git diff --cached --quiet; then
+            git commit -m "chore: rebuild adopters directory"
+            git push origin HEAD:main
+          fi
+          curl -sS "https://purge.jsdelivr.net/gh/heirloom-license/license@main/site/adopters.json" || true

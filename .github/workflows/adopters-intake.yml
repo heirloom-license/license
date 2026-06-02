@@ -11,14 +11,15 @@ jobs:
     if: contains(join(github.event.issue.labels.*.name, ','), 'adopter-submission')
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.x'
-      - run: pip install pyyaml
-      - name: Process submission
+      - name: Verify badge and open PR
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
           ISSUE_BODY: ${{ github.event.issue.body }}
-        run: python scripts/adopter_intake.py
+          REPO: ${{ github.repository }}
+        run: |
+          set -e
+          git clone --depth 1 "https://x-access-token:${GH_TOKEN}@github.com/${REPO}" repo
+          cd repo
+          python3 -m pip install pyyaml --break-system-packages -q || python3 -m pip install pyyaml -q
+          python3 scripts/adopter_intake.py
