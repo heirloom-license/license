@@ -20,11 +20,14 @@
   .count{color:var(--muted);font-size:14px;white-space:nowrap}
   .btn{padding:10px 18px;border-radius:8px;font-weight:600;font-size:14px;background:var(--accent);color:#fff;display:inline-block}
   .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;padding:8px 0 48px}
-  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px;display:flex;flex-direction:column;gap:8px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px;display:flex;flex-direction:column;gap:8px;scroll-margin-top:90px;transition:border-color .3s,box-shadow .3s}
+  .card.target{border-color:var(--accent2);box-shadow:0 0 0 2px rgba(31,157,99,.35)}
   .card .top{display:flex;align-items:center;gap:12px}
   .logo{width:40px;height:40px;border-radius:9px;object-fit:cover;background:#11161d;border:1px solid var(--line);flex:0 0 auto;display:flex;align-items:center;justify-content:center;font-weight:700;color:var(--accent2)}
-  .card h3{margin:0;font-size:17px}
+  .card h3{margin:0;font-size:17px;flex:1}
+  .perma{color:var(--muted);font-size:14px;opacity:.7}.perma:hover{opacity:1;text-decoration:none}
   .card p{margin:0;color:var(--muted);font-size:14px}
+  .url{font-size:13px;color:var(--accent2);word-break:break-all}
   .meta{display:flex;gap:8px;flex-wrap:wrap;margin-top:auto;padding-top:6px}
   .chip{font-size:11px;border:1px solid var(--line);border-radius:6px;padding:2px 8px;color:var(--muted)}
   .chip.v{color:var(--accent2);border-color:var(--accent)}
@@ -57,7 +60,8 @@
 </div>
 <footer>
   <div class="wrap">
-    Listings are self-submitted and badge-verified. Source of truth:
+    Listings are self-submitted and badge-verified. Each app has a shareable link
+    (the ⧉ on its card). Source of truth:
     <a href="https://github.com/heirloom-license/license/blob/main/adopters.yml">adopters.yml</a>.
   </div>
 </footer>
@@ -67,20 +71,42 @@ const grid=document.getElementById("grid"),stateEl=document.getElementById("stat
 let all=[];
 function initials(n){return n.split(/\s+/).map(w=>w[0]).join("").slice(0,2).toUpperCase();}
 function esc(s){return (s||"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
+function host(u){try{return new URL(u).host.replace(/^www\./,"")+new URL(u).pathname.replace(/\/$/,"");}catch(e){return u;}}
 function card(a){
-  const link=a.product_url||a.repo||"";
-  const name=link?`<a href="${esc(link)}" target="_blank" rel="noopener">${esc(a.name)}</a>`:esc(a.name);
+  const url=a.product_url||a.repo||"";
+  const name=url?`<a href="${esc(url)}" target="_blank" rel="noopener">${esc(a.name)}</a>`:esc(a.name);
   const logo=a.logo?`<img class="logo" src="${esc(a.logo)}" alt="">`:`<div class="logo">${initials(a.name)}</div>`;
+  const urlLine=url?`<a class="url" href="${esc(url)}" target="_blank" rel="noopener">${esc(host(url))} ↗</a>`:`<span class="url" style="color:var(--muted)">website coming soon</span>`;
   const verified=a.verified?`<span class="chip v">✓ verified</span>`:"";
   const status=a.status==="upcoming"?`<span class="chip up">upcoming</span>`:"";
-  return `<div class="card"><div class="top">${logo}<h3>${name}</h3></div><p>${esc(a.description||"")}</p><div class="meta"><span class="chip"><code>${esc(a.variant||"")}</code></span>${verified}${status}</div></div>`;
+  const perma=`<a class="perma" href="#${esc(a.slug)}" title="Copy link to ${esc(a.name)}" aria-label="Permalink">⧉</a>`;
+  return `<div class="card" id="${esc(a.slug)}">
+    <div class="top">${logo}<h3>${name}</h3>${perma}</div>
+    ${urlLine}
+    <p>${esc(a.description||"")}</p>
+    <div class="meta"><span class="chip"><code>${esc(a.variant||"")}</code></span>${verified}${status}</div>
+  </div>`;
 }
 function render(list){
   countEl.textContent=`${list.length} app${list.length===1?"":"s"}`;
   grid.innerHTML=list.map(card).join("");
   stateEl.style.display=list.length?"none":"block";
   if(!list.length)stateEl.textContent="No matches.";
+  highlightHash();
 }
+function highlightHash(){
+  const id=decodeURIComponent(location.hash.slice(1));
+  document.querySelectorAll(".card.target").forEach(c=>c.classList.remove("target"));
+  if(id){const el=document.getElementById(id);if(el){el.classList.add("target");el.scrollIntoView({behavior:"smooth",block:"center"});}}
+}
+document.addEventListener("click",e=>{
+  const p=e.target.closest(".perma");
+  if(p){e.preventDefault();const url=location.origin+location.pathname+p.getAttribute("href");
+    history.replaceState(null,"",p.getAttribute("href"));
+    if(navigator.clipboard)navigator.clipboard.writeText(url).catch(()=>{});
+    highlightHash();}
+});
+window.addEventListener("hashchange",highlightHash);
 fetch(DATA_URL).then(r=>r.json()).then(d=>{all=d.adopters||[];render(all);})
   .catch(()=>{stateEl.innerHTML='Couldn\'t load the directory right now. View it on <a href="https://github.com/heirloom-license/license/blob/main/ADOPTERS.md">GitHub</a>.';});
 q.addEventListener("input",()=>{const t=q.value.toLowerCase().trim();render(!t?all:all.filter(a=>(a.name+" "+a.description+" "+a.variant).toLowerCase().includes(t)));});

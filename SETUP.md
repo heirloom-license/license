@@ -137,6 +137,8 @@ point.
 
 - **`404` when adding the workflow via API/script** → token missing the `workflow`
   scope.
+- **Org allows only local actions (`local_only`)** → fine: the reference switch
+  uses no third-party actions, so it runs under restrictive org policies.
 - **Sunset step errors on visibility change** → `HEIRLOOM_PAT` missing, expired, or
   lacking **Administration: Read and write**.
 - **Switch fired unexpectedly** → `DORMANCY_DAYS` too low, or no commit/heartbeat
