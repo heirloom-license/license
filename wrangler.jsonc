@@ -1,0 +1,10 @@
+{
+  "name": "heirloom-license",
+  "compatibility_date": "2025-06-17",
+  "observability": { "enabled": true },
+  "assets": {
+    "directory": "./site",
+    "html_handling": "auto-trailing-slash",
+    "not_found_handling": "none"
+  }
+}
