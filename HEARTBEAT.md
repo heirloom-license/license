@@ -136,26 +136,36 @@ Two fields are **registered once** by the adopter (via the intake form or a main
 | `heartbeat_url` | adopter | Public URL of `heartbeat.json`. Enables status reporting. |
 | `pubkey` | adopter | The `ssh-ed25519 AAAA… ` public key line that signs the heartbeat. |
 
-One block is **written by the poller** (never hand-edited) and consumed by the site:
+One block is **written by the poller** (never hand-edited). It holds only the
+**signed facts** — the display state and runway are derived from them at render
+time so the countdown stays live between polls:
 
 ```yaml
 report:
-  state: active            # display state — see below
-  sig_ok: true             # signature verified against pubkey
-  last_signal: '2026-06-22T14:03:00Z'
-  emitted_at: '2026-06-26T09:00:11Z'
-  days_since_signal: 4
-  runway_days: 361         # dormancy_days - days_since_signal
-  sunset: null             # or { date, public_repo_url }
-  last_polled: '2026-06-26T12:00:05Z'
-  error: null              # human-readable reason when state == unknown
+  sig_ok: true                          # signature verified against the registered pubkey
+  last_signal: '2026-06-22T14:03:00Z'   # from the verified payload — resets the dormancy clock
+  emitted_at: '2026-06-26T09:00:11Z'    # from the verified payload — switch liveness
+  dormancy_days: 365                    # from the verified payload
+  change_license: MPL-2.0               # from the verified payload
+  sunset: null                          # or { date, public_repo_url }
+  error: null                           # reason the status is unavailable (⇒ state unknown)
 ```
+
+The poller records a fact only when the verified payload changes, so it commits
+roughly weekly (when the switch emits), not on every poll. `runway`,
+`days_since_signal`, and the display state below are **computed at render time**
+([`adopters.html`](site/adopters.html) live in the browser, and
+[`build_adopters.py`](scripts/build_adopters.py) for the static
+[`ADOPTERS.md`](ADOPTERS.md) snapshot) from `last_signal` / `emitted_at` /
+`dormancy_days`.
 
 ---
 
 ## Derived display states & thresholds
 
-The poller computes one **display state** from the verified payload. Constants:
+One **display state** is derived from the report facts at render time (in the
+browser, and by `build_adopters.py` for the static snapshot — both implement the
+same ladder; the poller itself records only facts). Constants:
 
 | Constant | Value | Rationale |
 |---|---|---|

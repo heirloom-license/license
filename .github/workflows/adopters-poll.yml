@@ -1,0 +1,29 @@
+name: Poll adopter heartbeats
+on:
+  schedule:
+    - cron: "0 */6 * * *"   # every 6 hours
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  poll:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Poll heartbeats, rebuild directory, commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -e
+          git clone --depth 1 "https://x-access-token:${GH_TOKEN}@github.com/${REPO}" repo
+          cd repo
+          python3 -m pip install pyyaml --break-system-packages -q || python3 -m pip install pyyaml -q
+          python3 scripts/poll_heartbeats.py
+          python3 scripts/build_adopters.py
+          git config user.name heirloom-bot
+          git config user.email bot@heirloomlicense.org
+          git add adopters.yml ADOPTERS.md site/adopters.json
+          if ! git diff --cached --quiet; then
+            git commit -m "chore: refresh adopter heartbeats"
+            git push origin HEAD:main
+          fi
