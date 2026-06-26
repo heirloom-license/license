@@ -81,18 +81,20 @@ def _check_url(url):
                 or ip.is_reserved or ip.is_multicast or ip.is_unspecified):
             raise ValueError(f"host resolves to disallowed address {a}")
 
-def fetch(url):
+def fetch(url, max_bytes=MAX_BYTES):
+    """Fetch bytes with SSRF guards (https-only, no redirects, no private IPs) and a
+    size cap. Reused by the intake bot for the badge page (with a larger cap)."""
     _check_url(url)
     u = urllib.parse.urlparse(url)
     if u.scheme == "file":
         with open(urllib.request.url2pathname(u.path), "rb") as f:
-            data = f.read(MAX_BYTES + 1)
+            data = f.read(max_bytes + 1)
     else:
         req = urllib.request.Request(url, headers={"User-Agent": "heirloom-heartbeat-poller"})
         with _OPENER.open(req, timeout=TIMEOUT) as r:
-            data = r.read(MAX_BYTES + 1)
-    if len(data) > MAX_BYTES:
-        raise ValueError(f"response exceeds {MAX_BYTES} bytes")
+            data = r.read(max_bytes + 1)
+    if len(data) > max_bytes:
+        raise ValueError(f"response exceeds {max_bytes} bytes")
     return data
 
 def verify_sig(slug, pubkey, payload_bytes, sig_bytes):

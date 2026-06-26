@@ -42,14 +42,22 @@ the badge in your README and in-app About box:
 Copy [`reference/.github/workflows/dead-mans-switch.yml`](reference/.github/workflows/dead-mans-switch.yml)
 into your repo at `.github/workflows/heirloom-dead-mans-switch.yml`.
 
-Open it and set the three values near the top:
+Open it and set the values near the top:
 
 ```yaml
 env:
   DORMANCY_DAYS: "365"                 # your Dormancy Window in days (12 months = 365)
   CHANGE_LICENSE_SPDX: "MPL-2.0"       # your Change License
   CHANGE_LICENSE_URL: "https://www.mozilla.org/media/MPL/2.0/index.txt"
+  APP_SLUG: "your-app-slug"            # your slug in adopters.yml — lowercase your
+                                       # product name, non-alphanumerics → hyphens
+                                       # (e.g. "Vellum Notes" → "vellum-notes")
+  VARIANT: "HL-1.0-MPL2.0-12mo"        # your license variant id (must imply DORMANCY_DAYS)
+  HEARTBEAT_REPO: ""                   # blank ⇒ <your-account>/heirloom-heartbeat
 ```
+
+`APP_SLUG` must match the slug your directory entry gets (the directory derives it
+from your product name the same way). `DORMANCY_DAYS` must match `VARIANT`'s window.
 
 > Pushing workflow files needs a token with the **`workflow`** scope. If you're
 > adding it through the API or a script and get a `404`, that missing scope is why.
@@ -61,17 +69,52 @@ needs its own token.
 
 1. Create a **fine-grained Personal Access Token** (GitHub ▸ Settings ▸ Developer
    settings ▸ Personal access tokens ▸ Fine-grained tokens).
-2. Scope it to **only this repository**, with these permissions:
-   - **Administration:** Read and write  *(flip visibility on Sunset)*
-   - **Contents:** Read and write  *(swap the LICENSE, write heartbeats)*
-   - **Issues:** Read and write  *(post the Sunset announcement)*
-3. In the repo: **Settings ▸ Secrets and variables ▸ Actions ▸ New repository
-   secret**. Name it exactly `HEIRLOOM_PAT` and paste the token.
+2. Scope it to **two repositories** — this (private) source repo and the (public)
+   `heirloom-heartbeat` repo from Step 4 — with these permissions:
+   - Source repo → **Administration:** R/W *(flip visibility on Sunset)*,
+     **Contents:** R/W *(swap the LICENSE, write the heartbeat clock)*,
+     **Issues:** R/W *(post the Sunset announcement)*
+   - Heartbeat repo → **Contents:** R/W *(push the public status file)*
+3. In the source repo: **Settings ▸ Secrets and variables ▸ Actions ▸ New
+   repository secret**. Name it exactly `HEIRLOOM_PAT` and paste the token.
 
 Set an expiry you'll actually renew, or "no expiration" if you accept the
 trade-off. An expired token silently disables the switch — see Hardening.
 
-## Step 4 — Keep it alive
+## Step 4 — Turn on public status reporting
+
+This publishes a signed, public heartbeat so the
+[adopters directory](https://heirloomlicense.org/adopters) can show that your
+switch is armed — and implements the license's public **Heartbeat Record** (§4).
+See [`HEARTBEAT.md`](HEARTBEAT.md) for the full protocol.
+
+Do these **in order** — the directory bot verifies your live heartbeat at submission
+time, so you must publish one *before* you list your app, or you'll be listed
+badge-only until you retry.
+
+1. **Create a public heartbeat repo.** Make a new **public** repo named
+   `heirloom-heartbeat` in your account, initialized with a commit (a README is
+   fine). Make sure its **default branch is `main`** (the Heartbeat URL below points
+   at `main`; substitute your default branch if it differs). It holds only
+   `heartbeat.json` — it reveals nothing about your source.
+2. **Generate a signing key:**
+   ```sh
+   ssh-keygen -t ed25519 -N "" -C "heirloom-heartbeat" -f hb_key
+   ```
+   - Paste the contents of **`hb_key`** (the private key — keep the BEGIN/END lines
+     and all newlines) into a source-repo secret named `HEIRLOOM_HEARTBEAT_KEY`.
+   - Keep the line in **`hb_key.pub`** for step 4, then delete both files.
+3. **Publish the first heartbeat.** With Steps 2–3 (the switch + `HEIRLOOM_PAT`) and
+   the steps above done, run the switch by hand: **Actions ▸ Heirloom Dead-Man's
+   Switch ▸ Run workflow**. Confirm `heartbeat.json` and `heartbeat.json.sig` now
+   exist in your `heirloom-heartbeat` repo.
+4. **List your app.** [Submit the adopter form](https://github.com/heirloom-license/license/issues/new?template=adopter-submission.yml)
+   with your **Heartbeat URL**
+   (`https://raw.githubusercontent.com/<you>/heirloom-heartbeat/main/heartbeat.json`)
+   and the **public key** from `hb_key.pub`. The bot verifies the signature and
+   opens a PR; the directory then polls and shows your live status.
+
+## Step 5 — Keep it alive
 
 The clock resets on any maintenance signal. You have two ways to send one:
 
@@ -79,7 +122,8 @@ The clock resets on any maintenance signal. You have two ways to send one:
   the switch perpetually reset — you'll never think about it.
 - **Manual heartbeat.** If you go quiet but are still around (a stable app you're
   not actively changing), run the workflow by hand: **Actions ▸ Heirloom Dead-Man's
-  Switch ▸ Run workflow**. That writes a `HEARTBEAT` file and resets the window.
+  Switch ▸ Run workflow**. That resets the window and publishes a fresh public
+  heartbeat (so the directory keeps showing you armed).
 
 Set a calendar reminder for ~10 months if your app might go quiet for long stretches.
 

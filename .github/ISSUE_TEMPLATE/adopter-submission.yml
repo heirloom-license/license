@@ -54,6 +54,23 @@ body:
     attributes:
       label: Logo URL
       description: Optional — a square PNG or SVG for the directory card
+  - type: input
+    id: heartbeat_url
+    attributes:
+      label: Heartbeat URL
+      description: >-
+        Optional but recommended — the public URL of your switch's
+        heartbeat.json (e.g. https://raw.githubusercontent.com/you/heirloom-heartbeat/main/heartbeat.json).
+        Enables the live, signed "switch armed" status on your card. See HEARTBEAT.md.
+      placeholder: https://raw.githubusercontent.com/you/heirloom-heartbeat/main/heartbeat.json
+  - type: input
+    id: pubkey
+    attributes:
+      label: Heartbeat public key
+      description: >-
+        Required if you set a Heartbeat URL — the ssh-ed25519 public key line
+        (contents of hb_key.pub) your switch signs heartbeats with.
+      placeholder: ssh-ed25519 AAAA… heirloom-heartbeat
   - type: checkboxes
     id: confirm
     attributes:
