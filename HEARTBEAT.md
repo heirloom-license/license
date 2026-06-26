@@ -81,7 +81,7 @@ is always fetched from the sibling URL `heartbeat_url + ".sig"`.
 | `last_signal` | ISO-8601 UTC | yes | Timestamp of the most recent maintenance signal (last commit or manual heartbeat). **Resets the dormancy clock.** |
 | `emitted_at` | ISO-8601 UTC | yes | When *this* heartbeat was produced. Written on **every** run — it is the liveness of the switch itself. |
 | `state` | `active` \| `dormant` \| `sunset` | yes | The switch's own view of its state. |
-| `sunset` | object \| null | iff `state==sunset` | `{ "date": "YYYY-MM-DD", "public_repo_url": "https://…" }` |
+| `sunset` | object \| null | iff `state==sunset` | `{ "date": "YYYY-MM-DD", "public_repo_url": "https://…" }` — `public_repo_url` **must be https** (it becomes a link). |
 
 Timestamps are UTC, `YYYY-MM-DDTHH:MM:SSZ`. Unknown extra fields are ignored
 (forward-compatible). A breaking change ships as `heirloom-heartbeat/v2`.
@@ -177,7 +177,7 @@ State resolution (first match wins):
 
 | Display state | Condition | Shown as |
 |---|---|---|
-| `unknown` | fetch failed, `sig_ok:false`, or schema mismatch | ⚪ status unavailable |
+| `unknown` | fetch failed, `sig_ok:false`, schema mismatch, future-dated stamp, or `state==sunset` without an https URL | ⚪ status unavailable |
 | `sunset` | `state==sunset` + `sunset` object present | ⚫ Sunset — open-sourced, links public repo |
 | `stale` | `now − emitted_at > STALE_AFTER_DAYS` | 🟠 no signal from switch since `emitted_at` |
 | `dormant` | `runway_days ≤ 0` | 🔴 dormant — past the window |

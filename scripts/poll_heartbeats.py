@@ -148,14 +148,21 @@ def poll_one(a, now):
     horizon = now + datetime.timedelta(days=FUTURE_TOLERANCE_DAYS)
     if last > horizon or emitted > horizon:
         rep["error"] = "timestamp is in the future (clock skew)"; return rep
-    sunset_obj = hb.get("sunset")
+    # Sunset is recorded ONLY when state==sunset AND the payload (adopter-signed,
+    # so attacker-influenceable) carries an https public_repo_url — this is what
+    # the directory turns into a clickable link, so the scheme is enforced here.
+    sunset_obj = None
     if hb.get("state") == "sunset":
-        if not (isinstance(sunset_obj, dict) and sunset_obj.get("public_repo_url")):
-            rep["error"] = "state=sunset but sunset object missing/invalid"; return rep
-    if not isinstance(sunset_obj, dict):
-        sunset_obj = None
+        so = hb.get("sunset")
+        url = so.get("public_repo_url") if isinstance(so, dict) else None
+        if not (isinstance(url, str) and url.startswith("https://")):
+            rep["error"] = "state=sunset but sunset.public_repo_url is missing or not https"
+            return rep
+        sunset_obj = {"date": (str(so["date"]) if so.get("date") is not None else None),
+                      "public_repo_url": url}
+    cl = hb.get("change_license")
     rep.update(last_signal=iso_z(last), emitted_at=iso_z(emitted), dormancy_days=dormancy,
-               change_license=hb.get("change_license"), sunset=sunset_obj)
+               change_license=(str(cl) if cl is not None else None), sunset=sunset_obj)
     return rep
 
 
@@ -170,6 +177,9 @@ def derive_state(rep, now):
         dormancy = int(rep["dormancy_days"])
     except Exception:
         return "unknown"
+    if (emitted - now).total_seconds() / 86400.0 > FUTURE_TOLERANCE_DAYS \
+            or (last - now).total_seconds() / 86400.0 > FUTURE_TOLERANCE_DAYS:
+        return "unknown"   # clock skew — mirror poll_one()
     if (now - emitted).total_seconds() / 86400.0 > STALE_AFTER_DAYS:
         return "stale"
     runway = dormancy - int((now - last).total_seconds() // 86400)

@@ -32,6 +32,16 @@
   .chip{font-size:11px;border:1px solid var(--line);border-radius:6px;padding:2px 8px;color:var(--muted)}
   .chip.v{color:var(--accent2);border-color:var(--accent)}
   .chip.up{color:#d2a23b;border-color:#5a4a1f}
+  .chip.sig{color:var(--accent2);border-color:var(--accent)}
+  .status{display:flex;align-items:center;gap:7px;font-size:13px;margin-top:2px;color:var(--ink)}
+  .status .muted2{color:var(--muted)}
+  .dot{width:9px;height:9px;border-radius:50%;flex:0 0 auto}
+  .dot.active{background:#1f9d63;box-shadow:0 0 0 3px rgba(31,157,99,.18)}
+  .dot.low_runway{background:#d2a23b;box-shadow:0 0 0 3px rgba(210,162,59,.18)}
+  .dot.dormant{background:#e5534b;box-shadow:0 0 0 3px rgba(229,83,75,.18)}
+  .dot.stale{background:#d2792b;box-shadow:0 0 0 3px rgba(210,121,43,.18)}
+  .dot.sunset{background:#8b949e}
+  .dot.unknown{background:#586069}
   code{background:#11161d;border:1px solid var(--line);border-radius:5px;padding:1px 6px;font-size:12px}
   .state{color:var(--muted);text-align:center;padding:40px 0}
   footer{padding:40px 0 72px;color:var(--muted);font-size:14px;text-align:center;border-top:1px solid var(--line)}
@@ -46,7 +56,8 @@
     <span class="badge">Heirloom License™ · Adopters</span>
     <h1>Apps built to outlive their makers.</h1>
     <p class="tag">Every app here ships under the Heirloom License — if its developer
-      ever walks away, the source opens to everyone. Verified by badge, backed by a GitHub-based kill-switch.</p>
+      ever walks away, the source opens to everyone. Each app's dead-man's switch
+      reports a <strong>signed, live status</strong> below.</p>
   </div>
 </header>
 <div class="wrap">
@@ -60,36 +71,81 @@
 </div>
 <footer>
   <div class="wrap">
-    Listings are self-submitted and badge-verified. Each app has a shareable link
-    (the ⧉ on its card). Source of truth:
-    <a href="https://github.com/heirloom-license/license/blob/main/adopters.yml">adopters.yml</a>.
+    Status is <strong>self-reported and cryptographically signed</strong> by each app's
+    own dead-man's switch, then signature-verified here — we confirm the switch is armed
+    and untampered, not the private source. A switch that stops reporting goes
+    <em>stale</em> rather than falsely green. Listings are self-submitted and badge-verified;
+    each app has a shareable link (the ⧉ on its card). Source of truth:
+    <a href="https://github.com/heirloom-license/license/blob/main/adopters.yml">adopters.yml</a>
+    · <a href="https://github.com/heirloom-license/license/blob/main/HEARTBEAT.md">how status works</a>.
   </div>
 </footer>
 <script>
 const DATA_URL="https://raw.githubusercontent.com/heirloom-license/license/main/site/adopters.json";
 const grid=document.getElementById("grid"),stateEl=document.getElementById("state"),countEl=document.getElementById("count"),q=document.getElementById("q");
 let all=[];
-function initials(n){return n.split(/\s+/).map(w=>w[0]).join("").slice(0,2).toUpperCase();}
-function esc(s){return (s||"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
+function initials(n){return String(n||"").trim().split(/\s+/).map(w=>w[0]||"").join("").slice(0,2).toUpperCase()||"·";}
+function esc(s){return String(s==null?"":s).replace(/[&<>"'`]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;","`":"&#96;"}[c]));}
+function safeUrl(u){return /^https?:\/\//i.test(u||"")?String(u):"";}  // block javascript:/data: in href/src
 function host(u){try{return new URL(u).host.replace(/^www\./,"")+new URL(u).pathname.replace(/\/$/,"");}catch(e){return u;}}
+// Live status derived in-browser from the signed report facts — mirrors
+// scripts/poll_heartbeats.py derive_state(); see HEARTBEAT.md.
+const STALE_AFTER_DAYS=14, LOW_RUNWAY_DAYS=90;
+function parseTs(s){const d=s?new Date(s):null;return d&&!isNaN(d)?d:null;}
+function deriveStatus(r){
+  if(!r||r.error||!r.sig_ok) return {state:"unknown"};
+  if(r.sunset&&typeof r.sunset==="object") return {state:"sunset"};
+  const now=new Date(),last=parseTs(r.last_signal),emitted=parseTs(r.emitted_at),dormancy=parseInt(r.dormancy_days,10);
+  if(!last||!emitted||!Number.isFinite(dormancy)) return {state:"unknown"};
+  if((emitted-now)/864e5>2||(last-now)/864e5>2) return {state:"unknown"};  // clock skew (mirror poller)
+  const ageDays=(now-emitted)/864e5,daysSince=Math.floor((now-last)/864e5),runway=dormancy-daysSince;
+  let state="active";
+  if(ageDays>STALE_AFTER_DAYS) state="stale";
+  else if(runway<=0) state="dormant";
+  else if(runway<=LOW_RUNWAY_DAYS) state="low_runway";
+  return {state,runwayDays:runway,daysSinceSignal:daysSince};
+}
+function fmtAgo(d){d=Math.max(0,Math.round(d));return d===0?"today":d===1?"1 day ago":d<45?d+" days ago":d<365?Math.round(d/30)+" mo ago":Math.round(d/365)+" yr ago";}
+function fmtDate(s){const d=parseTs(s);return d?d.toISOString().slice(0,10):"";}
+function statusRow(a){
+  const r=a.report; if(!r) return "";
+  const s=deriveStatus(r);
+  const tips={active:"Switch armed and recently checked in.",low_runway:"Armed, but approaching the dormancy window.",dormant:"Past the dormancy window — Sunset is due.",stale:"The switch hasn't checked in recently, so its status can't be vouched for.",sunset:"This app has Sunset — its source is now open.",unknown:"Status could not be verified right now."};
+  let body;
+  if(s.state==="sunset"&&r.sunset&&/^https:\/\//i.test(r.sunset.public_repo_url||"")){
+    const lic=r.change_license?` under ${esc(r.change_license)}`:"",dt=r.sunset.date?` ${esc(fmtDate(r.sunset.date))}`:"";
+    body=`Open-sourced${lic}${dt} — <a href="${esc(r.sunset.public_repo_url)}" target="_blank" rel="noopener">source ↗</a>`;
+  }else{
+    const labels={active:"Armed",low_runway:"Armed — low runway",dormant:"Dormant",stale:"No signal from switch",sunset:"Sunset — open-sourced",unknown:"Status unavailable"};
+    let detail="";
+    if(s.state==="active"||s.state==="low_runway") detail=`last signal ${fmtAgo(s.daysSinceSignal)} · ~${Math.max(0,s.runwayDays)}d runway`;
+    else if(s.state==="stale"){const fd=fmtDate(r.emitted_at);detail=fd?`last seen ${fd}`:"";}
+    else if(s.state==="dormant") detail=`${Math.abs(s.runwayDays)}d past window`;
+    body=`<span>${labels[s.state]||"Status unavailable"}</span>${detail?` <span class="muted2">· ${esc(detail)}</span>`:""}`;
+  }
+  return `<div class="status" title="${esc(tips[s.state]||"")}"><span class="dot ${s.state}" aria-hidden="true"></span>${body}</div>`;
+}
 function card(a){
-  const url=a.product_url||a.repo||"";
-  const name=url?`<a href="${esc(url)}" target="_blank" rel="noopener">${esc(a.name)}</a>`:esc(a.name);
-  const logo=a.logo?`<img class="logo" src="${esc(a.logo)}" alt="">`:`<div class="logo">${initials(a.name)}</div>`;
+  const url=safeUrl(a.product_url||a.repo||"");
+  const nm=a.name||"(unnamed)";
+  const name=url?`<a href="${esc(url)}" target="_blank" rel="noopener">${esc(nm)}</a>`:esc(nm);
+  const logo=safeUrl(a.logo)?`<img class="logo" src="${esc(a.logo)}" alt="">`:`<div class="logo">${esc(initials(a.name))}</div>`;
   const urlLine=url?`<a class="url" href="${esc(url)}" target="_blank" rel="noopener">${esc(host(url))} ↗</a>`:`<span class="url" style="color:var(--muted)">website coming soon</span>`;
   const verified=a.verified?`<span class="chip v">✓ verified</span>`:"";
-  const status=a.status==="upcoming"?`<span class="chip up">upcoming</span>`:"";
+  const signed=(a.report&&a.report.sig_ok)?`<span class="chip sig" title="Signed by the app's own switch and signature-verified here.">self-reported · signed</span>`:"";
+  const upcoming=a.status==="upcoming"?`<span class="chip up">upcoming</span>`:"";
   const perma=`<a class="perma" href="#${esc(a.slug)}" title="Copy link to ${esc(a.name)}" aria-label="Permalink">⧉</a>`;
   return `<div class="card" id="${esc(a.slug)}">
     <div class="top">${logo}<h3>${name}</h3>${perma}</div>
     ${urlLine}
+    ${statusRow(a)}
     <p>${esc(a.description||"")}</p>
-    <div class="meta"><span class="chip"><code>${esc(a.variant||"")}</code></span>${verified}${status}</div>
+    <div class="meta"><span class="chip"><code>${esc(a.variant||"")}</code></span>${verified}${signed}${upcoming}</div>
   </div>`;
 }
 function render(list){
   countEl.textContent=`${list.length} app${list.length===1?"":"s"}`;
-  grid.innerHTML=list.map(card).join("");
+  grid.innerHTML=list.map(a=>{try{return card(a)}catch(e){console.error("card render failed",a&&a.slug,e);return "";}}).join("");
   stateEl.style.display=list.length?"none":"block";
   if(!list.length)stateEl.textContent="No matches.";
   highlightHash();
