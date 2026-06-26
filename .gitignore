@@ -2,3 +2,5 @@
 node_modules/
 .wrangler/
 .dns-backup-*.json
+__pycache__/
+*.pyc
