@@ -2,28 +2,45 @@
 #
 # Self-contained: uses NO third-party actions, so it runs even under an org
 # Actions policy of "Allow <org> actions only" (local_only). It clones the repo
-# itself and uses the runner's built-in git, curl, and gh.
+# itself and uses the runner's built-in git, curl, gh, jq, and ssh-keygen.
 #
-# Purpose: if the maintainer goes dormant for DORMANCY_DAYS, this workflow
-# publishes the repository and swaps in the Change License, fulfilling the
-# Sunset obligation in the Heirloom License automatically.
+# It does two things on every run:
+#   1. SWITCH — if the maintainer goes dormant for DORMANCY_DAYS, it publishes the
+#      repository and swaps in the Change License, fulfilling the Sunset obligation.
+#   2. HEARTBEAT — it publishes a small, signed, PUBLIC status file so the Heirloom
+#      adopters directory can show live proof the switch is armed. See HEARTBEAT.md.
 #
 # ── Setup ────────────────────────────────────────────────────────────────────
-# 1. Keep this repo PRIVATE while you maintain it.
-# 2. Create a fine-grained Personal Access Token scoped to THIS repo with:
-#       Administration: Read & Write   (flip visibility on Sunset)
-#       Contents:       Read & Write   (clone, swap LICENSE, write heartbeats)
-#       Issues:         Read & Write   (post the Sunset announcement)
+# 1. Keep this (source) repo PRIVATE while you maintain it.
+# 2. Create a fine-grained Personal Access Token with:
+#       Source repo →  Administration: R/W (flip visibility on Sunset)
+#                      Contents:       R/W (clone, swap LICENSE, write heartbeats)
+#                      Issues:         R/W (post the Sunset announcement)
+#       Heartbeat repo →  Contents:    R/W (push the public status file)
 #    Save it as a repo secret named  HEIRLOOM_PAT
 #    (The default GITHUB_TOKEN cannot change repository visibility.)
-# 3. Set DORMANCY_DAYS / CHANGE_LICENSE_* below to match your license variant.
-# 4. Stay alive by committing as normal, OR run this workflow manually
+# 3. Create a PUBLIC repo named  heirloom-heartbeat  in your account, initialized
+#    with a commit (e.g. a README) so it has a default branch. It holds only the
+#    status file — it reveals nothing about your source.
+# 4. Generate a signing key and register it:
+#       ssh-keygen -t ed25519 -N "" -C "heirloom-heartbeat" -f hb_key
+#       # paste the contents of  hb_key  into the repo secret HEIRLOOM_HEARTBEAT_KEY
+#       #   (paste it verbatim — keep the BEGIN/END lines and all newlines intact)
+#       # paste the line in      hb_key.pub  into your adopters.yml entry (pubkey:)
+# 5. Set APP_SLUG / VARIANT / DORMANCY_DAYS / CHANGE_LICENSE_* below.
+# 6. Stay alive by committing as normal, OR run this workflow manually
 #    (Actions ▸ Heirloom Dead-Man's Switch ▸ Run workflow) to write a heartbeat.
 #
 # ── Honesty note ─────────────────────────────────────────────────────────────
 # This automation is a good-faith delivery mechanism. It can be defeated by
 # deleting the account or disabling Actions before disappearing. The binding
 # promise is the license text itself (Section 6); this just performs it.
+#
+# Known limit: GitHub auto-disables a scheduled workflow after 60 days of NO
+# repository activity. A repo going dormant will therefore have BOTH its Sunset
+# check and its heartbeat halt around day 60 — the directory will show "stale"
+# (the honest signal) and the license text still legally compels publication.
+# For stronger assurance, mirror the repo or use external source escrow.
 
 name: Heirloom Dead-Man's Switch
 
@@ -37,9 +54,14 @@ permissions:
   issues: write
 
 env:
-  DORMANCY_DAYS: "365"                 # match your variant (12 months = 365)
+  # ── Your license variant ── (DORMANCY_DAYS MUST match VARIANT's window) ──
+  DORMANCY_DAYS: "365"                 # 12 months = 365; keep in sync with VARIANT
   CHANGE_LICENSE_SPDX: "MPL-2.0"
   CHANGE_LICENSE_URL: "https://www.mozilla.org/media/MPL/2.0/index.txt"
+  # ── Status reporting (Heirloom Heartbeat — see HEARTBEAT.md) ──
+  APP_SLUG: "your-app-slug"            # must match your slug in adopters.yml
+  VARIANT: "HL-1.0-MPL2.0-12mo"        # your license variant id (implies the window above)
+  HEARTBEAT_REPO: ""                   # owner/heirloom-heartbeat (blank ⇒ <owner>/heirloom-heartbeat)
 
 jobs:
   switch:
@@ -48,7 +70,9 @@ jobs:
       - name: Heartbeat or Sunset
         env:
           GH_TOKEN: ${{ secrets.HEIRLOOM_PAT }}
+          HEARTBEAT_KEY: ${{ secrets.HEIRLOOM_HEARTBEAT_KEY }}
           REPO: ${{ github.repository }}
+          OWNER: ${{ github.repository_owner }}
           EVENT: ${{ github.event_name }}
         run: |
           set -euo pipefail
@@ -56,46 +80,110 @@ jobs:
             echo "::error::HEIRLOOM_PAT secret is missing — the switch cannot run."; exit 1
           fi
 
+          NOW="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          HB_REPO="${HEARTBEAT_REPO:-}"
+          [ -n "$HB_REPO" ] || HB_REPO="${OWNER}/heirloom-heartbeat"
+          KEYFILE="$(pwd)/hb_key"
+          trap 'rm -f "$KEYFILE" 2>/dev/null || true' EXIT   # never leave the key on disk
+
+          # --- Validate the signing key up front, before any irreversible action ---
+          REPORT=1
+          if [ -z "${HEARTBEAT_KEY:-}" ]; then
+            echo "::warning::HEIRLOOM_HEARTBEAT_KEY not set — status reporting disabled (the switch still runs)."
+            REPORT=0
+          else
+            ( umask 077; printf '%s\n' "$HEARTBEAT_KEY" > "$KEYFILE" )
+            if ! ssh-keygen -y -f "$KEYFILE" >/dev/null 2>&1; then
+              echo "::error::HEIRLOOM_HEARTBEAT_KEY is not a valid OpenSSH private key (were the BEGIN/END lines and newlines preserved when pasting the secret?)."
+              exit 1
+            fi
+          fi
+
           git clone --depth 1 "https://x-access-token:${GH_TOKEN}@github.com/${REPO}" repo
           cd repo
           git config user.name  "heirloom-bot"
           git config user.email "bot@heirloomlicense.org"
 
-          # --- manual run = heartbeat: record and stop ---
+          STATE="active"
+          SUNSET_JSON="null"
+          LAST_SIGNAL=""
+
           if [ "$EVENT" = "workflow_dispatch" ]; then
-            date -u +"%Y-%m-%dT%H:%M:%SZ" > HEARTBEAT
+            # --- manual run = heartbeat: reset the dormancy clock with a commit ---
+            echo "$NOW" > HEARTBEAT
             git add HEARTBEAT
-            git commit -m "chore: heartbeat" || echo "no change"
-            git push || echo "nothing to push"
+            git commit -m "chore: heartbeat" || echo "no change to commit"
+            git push   # fail loudly: a masked failure would mean the clock did NOT reset
+            LAST_SIGNAL="$NOW"
             echo "Heartbeat recorded. Dormancy clock reset."
+          else
+            # --- scheduled run = measure dormancy from the last commit ---
+            RAW_LAST="$(git log -1 --format=%cI 2>/dev/null || true)"
+            if [ -z "$RAW_LAST" ]; then
+              echo "No commits found — cannot measure dormancy; will report last_signal = now."
+              LAST_SIGNAL="$NOW"
+            else
+              LAST_SIGNAL="$(date -u -d "$RAW_LAST" +%Y-%m-%dT%H:%M:%SZ)"   # normalize to UTC Z
+              LAST_EPOCH=$(date -u -d "$RAW_LAST" +%s)
+              NOW_EPOCH=$(date -u -d "$NOW" +%s)
+              DAYS=$(( (NOW_EPOCH - LAST_EPOCH) / 86400 ))
+              echo "Last maintenance signal: $LAST_SIGNAL (${DAYS} days ago); window is ${DORMANCY_DAYS} days."
+              if [ "$DAYS" -ge "${DORMANCY_DAYS}" ]; then
+                # --- SUNSET (irreversible — order matters: relicense+push BEFORE going public) ---
+                echo "Dormant for ${DAYS} days — executing Sunset."
+                curl -fsSL "${CHANGE_LICENSE_URL}" -o LICENSE
+                {
+                  echo ""
+                  echo "This software Sunset under the Heirloom License v1.0 on $(date -u +%Y-%m-%d)"
+                  echo "and is now governed by ${CHANGE_LICENSE_SPDX}. This grant is irrevocable."
+                } >> LICENSE
+                git add LICENSE
+                git commit -m "Sunset: relicense under ${CHANGE_LICENSE_SPDX} (Heirloom License)" || echo "no change to commit"
+                git push   # MUST succeed before we make the repo public, or it would go public under the OLD license
+
+                gh api -X PATCH "repos/${REPO}" -f visibility=public -F private=false
+
+                gh issue create \
+                  --title "This project has Sunset and is now open source (${CHANGE_LICENSE_SPDX})" \
+                  --body "Under the Heirloom License v1.0, this project entered the Sunset state after ${DORMANCY_DAYS} days of dormancy. The full source is now public and irrevocably licensed under ${CHANGE_LICENSE_SPDX}. The community is free to fork, fix, and continue it. See https://heirloomlicense.org" \
+                  || echo "::warning::Sunset announcement issue could not be created — Sunset itself succeeded."
+
+                STATE="sunset"
+                SUNSET_JSON="$(jq -n --arg d "$(date -u +%Y-%m-%d)" --arg u "https://github.com/${REPO}" '{date:$d,public_repo_url:$u}')"
+              else
+                echo "Not dormant (${DAYS}/${DORMANCY_DAYS})."
+              fi
+            fi
+          fi
+
+          cd ..
+
+          # ── Publish a signed public heartbeat (Heirloom Heartbeat v1) ──────────
+          if [ "$REPORT" -eq 0 ]; then
+            echo "Status reporting disabled (no signing key). Done."
             exit 0
           fi
 
-          # --- scheduled run = measure dormancy from the last commit ---
-          LAST=$(git log -1 --format=%cI)
-          LAST_EPOCH=$(date -u -d "$LAST" +%s)
-          NOW_EPOCH=$(date -u +%s)
-          DAYS=$(( (NOW_EPOCH - LAST_EPOCH) / 86400 ))
-          echo "Last maintenance signal: $LAST (${DAYS} days ago); window is ${DORMANCY_DAYS} days."
-          if [ "$DAYS" -lt "${DORMANCY_DAYS}" ]; then
-            echo "Not dormant (${DAYS}/${DORMANCY_DAYS}). No action."
-            exit 0
-          fi
+          jq -n \
+            --arg app "$APP_SLUG" --arg repo "$REPO" --arg variant "$VARIANT" \
+            --argjson dormancy "$DORMANCY_DAYS" --arg cl "$CHANGE_LICENSE_SPDX" \
+            --arg last "$LAST_SIGNAL" --arg now "$NOW" --arg state "$STATE" \
+            --argjson sunset "$SUNSET_JSON" \
+            '{schema:"heirloom-heartbeat/v1",app:$app,repo:$repo,variant:$variant,dormancy_days:$dormancy,change_license:$cl,last_signal:$last,emitted_at:$now,state:$state,sunset:$sunset}' \
+            > heartbeat.json
 
-          # --- SUNSET ---
-          echo "Dormant for ${DAYS} days — executing Sunset."
-          curl -fsSL "${CHANGE_LICENSE_URL}" -o LICENSE
-          {
-            echo ""
-            echo "This software Sunset under the Heirloom License v1.0 on $(date -u +%Y-%m-%d)"
-            echo "and is now governed by ${CHANGE_LICENSE_SPDX}. This grant is irrevocable."
-          } >> LICENSE
-          git add LICENSE
-          git commit -m "Sunset: relicense under ${CHANGE_LICENSE_SPDX} (Heirloom License)" || echo "no change"
-          git push || echo "nothing to push"
+          ssh-keygen -Y sign -f "$KEYFILE" -n heirloom-heartbeat heartbeat.json
+          rm -f "$KEYFILE"
 
-          gh api -X PATCH "repos/${REPO}" -f visibility=public -F private=false
-
-          gh issue create \
-            --title "This project has Sunset and is now open source (${CHANGE_LICENSE_SPDX})" \
-            --body "Under the Heirloom License v1.0, this project entered the Sunset state after ${DORMANCY_DAYS} days of dormancy. The full source is now public and irrevocably licensed under ${CHANGE_LICENSE_SPDX}. The community is free to fork, fix, and continue it. See https://heirloomlicense.org"
+          git clone --depth 1 "https://x-access-token:${GH_TOKEN}@github.com/${HB_REPO}" hb || {
+            echo "::error::Could not clone ${HB_REPO}. Create a PUBLIC repo named heirloom-heartbeat (initialized with a commit) and give HEIRLOOM_PAT Contents:R/W on it."
+            exit 1
+          }
+          cp heartbeat.json heartbeat.json.sig hb/
+          cd hb
+          git config user.name  "heirloom-bot"
+          git config user.email "bot@heirloomlicense.org"
+          git add heartbeat.json heartbeat.json.sig
+          git commit -m "heartbeat ${NOW} (${STATE})" || echo "no change to commit"
+          git push   # fail loudly: the public proof must actually update
+          echo "Published signed heartbeat to ${HB_REPO} (state=${STATE})."
