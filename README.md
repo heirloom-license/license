@@ -50,6 +50,21 @@ Full walkthrough (with safe testing and hardening): **[SETUP.md](SETUP.md)**.
 
 Then [submit your app](https://github.com/heirloom-license/license/issues/new?template=adopter-submission.yml) to the **[adopters directory](https://heirloomlicense.org/adopters)** — the bot verifies your badge and opens the PR.
 
+### Show you're alive (recommended)
+
+Your switch can publish a **public heartbeat** so the directory shows your app as
+**🟢 armed** — live proof the promise is active, with a runway countdown — and a switch
+that goes quiet shows **stale** rather than silently lapsing. Two ways, pick one:
+
+- **Public maintenance log** *(simplest — no keys)*: publish a public JSONL log of your
+  commits/releases; the directory reads it. Reference:
+  [`heartbeat-log.yml`](reference/.github/workflows/heartbeat-log.yml) +
+  [`heartbeat-dispatch.yml`](reference/.github/workflows/heartbeat-dispatch.yml).
+- **Signed heartbeat** *(hardened)*: the dead-man's switch signs and publishes a
+  `heartbeat.json` the directory verifies.
+
+Full protocol: **[HEARTBEAT.md](HEARTBEAT.md)**.
+
 ## The identifier convention
 
 Like SPDX and FSL, the license encodes its parameters in the name:
@@ -73,19 +88,25 @@ heirloom-license/
 ├── TRADEMARK.md               Marks policy (name + badge)
 ├── SUMMARY.md                 Plain-English explanation
 ├── README.md                  This file
-├── SETUP.md                   Step-by-step dead-man's switch setup guide
+├── SETUP.md                   Dead-man's switch + status-reporting setup guide
+├── HEARTBEAT.md               Status-reporting protocol (heartbeat → directory)
 ├── adopters.yml               Source of truth for the adopters directory
 ├── ADOPTERS.md                Generated adopters table (do not edit by hand)
+├── DEPLOY.md                  How the site + directory automation are deployed
 ├── LEGAL-REVIEW.md            What still needs a lawyer, and open questions
 ├── ROADMAP.md                 Website, funding, launch, governance plan
 ├── badges/                    SVG badge + usage rules
 ├── templates/
 │   └── HL-1.0-MPL2.0-12mo.md  Pre-filled example for the default variant
-├── reference/
-│   └── .github/workflows/
-│       └── dead-mans-switch.yml   Drop-in auto-publish workflow
+├── scripts/                   Directory pipeline: build, badge intake, heartbeat poll
+├── reference/.github/workflows/
+│   ├── dead-mans-switch.yml      Auto-publish switch + signed heartbeat
+│   ├── heartbeat-log.yml         Public maintenance-log publisher (simplest)
+│   └── heartbeat-dispatch.yml    Private→public commit signal
+├── .github/                   Adopter issue form + directory automation workflows
 └── site/
-    └── index.html             Landing page for heirloomlicense.org
+    ├── index.html             Landing page for heirloomlicense.org
+    └── adopters.html          Live adopters directory (reads adopters.json)
 ```
 
 ## License of the license

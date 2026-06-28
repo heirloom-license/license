@@ -57,15 +57,17 @@ repo. Even a thin structure helps:
 
 ## Phase 5 — You as first adopter
 
-This is the proof. For your Mac apps:
+This is the proof. **Memophant** is the live first adopter:
 
-- [ ] Choose the variant — `HL-1.0-MPL2.0-12mo` is the default; confirm MPL-2.0
-      vs GPL/AGPL per app.
-- [ ] Add `LICENSE.md` + filled `templates/` parameters to each app repo (private).
-- [ ] Install `dead-mans-switch.yml`, create the `CONTINUITY_PAT`, set
-      `DORMANCY_DAYS=365`.
-- [ ] Add the badge to each app's site, README, and About box.
-- [ ] List them in `ADOPTERS.md`.
+- [x] Variant chosen — `HL-1.0-MPL2.0-12mo`.
+- [x] `LICENSE.md` in the (private) app repo.
+- [x] Dead-man's switch installed (the secret is `HEIRLOOM_PAT`; `DORMANCY_DAYS=365`).
+- [x] Listed in the directory **and reporting live status** — Memophant publishes a
+      public maintenance log (`memophant-public/heartbeat.log`); the directory polls it
+      and shows it 🟢 armed. See [`HEARTBEAT.md`](HEARTBEAT.md).
+- [ ] Add the **heirloomlicense.org badge** to memophant.co (the site references the
+      guarantee but doesn't yet carry the badge link, so the directory marks it
+      `verified: false`).
 - [ ] Write a short launch post: "Why my apps will open-source themselves if I
       ever quit." That post is the marketing for the whole license.
 
