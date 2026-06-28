@@ -43,9 +43,16 @@ for a in adopters:
 
 # JSON consumed by the website directory (carries the signed `report` facts so
 # the browser — and any third party — can derive and re-verify status).
+# `updated` is derived from the data (newest signal), NOT the build's wall clock, so
+# the output is a pure function of adopters.yml — re-running on a 6h cron with no real
+# change produces an identical file (no commit churn).
+_stamps = [a["report"]["emitted_at"] for a in adopters
+           if isinstance(a.get("report"), dict) and a["report"].get("emitted_at")]
+_stamps += [a["added"] for a in adopters if a.get("added")]
+updated = max(_stamps) if _stamps else ""
 (OUT / "site").mkdir(parents=True, exist_ok=True)
 (OUT / "site" / "adopters.json").write_text(json.dumps(
-    {"updated": now.strftime("%Y-%m-%dT%H:%M:%SZ"), "count": len(adopters), "adopters": adopters},
+    {"updated": updated, "count": len(adopters), "adopters": adopters},
     indent=2) + "\n")
 
 # Human-readable markdown table
