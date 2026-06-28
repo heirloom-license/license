@@ -1,0 +1,47 @@
+# Heirloom Heartbeat — private-repo dispatcher (reference, pairs with heartbeat-log.yml)
+#
+# Put this in your PRIVATE source repo. On every push to the default branch (and on
+# release), it fires a repository_dispatch at your PUBLIC log repo so heartbeat-log.yml
+# records a "commit"/"release" entry — tying the public maintenance signal to real
+# development without exposing the private repo.
+#
+# Setup:
+#   1. Set PUBLIC_REPO below to your public log repo (<you>/<app>-public).
+#   2. Create a fine-grained PAT scoped to that PUBLIC repo with Contents: R/W (it only
+#      needs to trigger the dispatch), and save it as the secret HEARTBEAT_DISPATCH_TOKEN.
+#
+# This is the simplest reporting path — no signing keys. (For the cryptographically
+# signed alternative, see dead-mans-switch.yml's heartbeat publishing + HEARTBEAT.md.)
+
+name: Heartbeat dispatch
+on:
+  push:
+    branches: [main]
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+env:
+  PUBLIC_REPO: "your-account/your-app-public"   # <-- set this
+
+concurrency:
+  group: heartbeat-dispatch-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fire repository_dispatch on the public log repo
+        env:
+          GH_TOKEN: ${{ secrets.HEARTBEAT_DISPATCH_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh api -X POST "/repos/${PUBLIC_REPO}/dispatches" \
+            -f event_type=private-repo-commit \
+            -f client_payload[sha]="${GITHUB_SHA}" \
+            -f client_payload[ref]="${GITHUB_REF}" \
+            -f client_payload[short_sha]="${GITHUB_SHA:0:7}"
+          echo "Dispatched maintenance signal to ${PUBLIC_REPO}."

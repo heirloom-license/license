@@ -2,9 +2,21 @@ adopters:
 - name: Memophant
   product_url: https://memophant.co
   repo: ''
-  description: A native macOS command center for repo-resident AI project memory. Captures what your AI coding sessions learn, keeps it in your repo, hands it back to the next session.
+  description: A native macOS command center for repo-resident AI project memory.
+    Captures what your AI coding sessions learn, keeps it in your repo, hands it back
+    to the next session.
   variant: HL-1.0-MPL2.0-12mo
   logo: ''
   added: '2026-06-02'
-  status: upcoming
+  status: live
   verified: false
+  heartbeat_url: https://raw.githubusercontent.com/awizemann/memophant-public/main/heartbeat.log
+  report:
+    source: log
+    sig_ok: null
+    last_signal: '2026-06-28T00:52:24Z'
+    emitted_at: '2026-06-28T00:52:24Z'
+    dormancy_days: 365
+    change_license: MPL-2.0
+    sunset: null
+    error: null

@@ -1,0 +1,97 @@
+# Heirloom Heartbeat — public maintenance log (reference, "simplest" source)
+#
+# Put this in a PUBLIC repo you own (e.g. <you>/<app>-public). It appends a JSONL
+# entry to `heartbeat.log` on every maintenance signal, giving the Heirloom adopters
+# directory a public, timestamped record of continued maintenance (license §4(a)) —
+# with NO keys or secrets to manage. Then list your app pointing `heartbeat_url` at:
+#   https://raw.githubusercontent.com/<you>/<app>-public/main/heartbeat.log
+#
+# Entries are committed via the GitHub Contents API, so each commit is GitHub-signed
+# (the "Verified" badge) — that, plus the log living in your own public repo, is the
+# provenance the directory trusts (see HEARTBEAT.md → "Public log source").
+#
+# Triggers → entry kind:
+#   schedule (monthly)         → "monthly"  (liveness floor — proves the mechanism runs)
+#   workflow_dispatch (manual) → "manual"   (liveness)
+#   release.published          → "release"  (real work — resets the dormancy clock)
+#   repository_dispatch        → "commit"   (real work — fired by your PRIVATE repo on push;
+#                                            see heartbeat-dispatch.yml)
+#
+# A stale monthly cron alone cannot mask abandonment: the directory measures the
+# dormancy clock from commit/release entries only, using monthly/manual purely as a
+# "the log is still alive" signal.
+
+name: Heartbeat
+on:
+  schedule:
+    - cron: "0 0 1 * *"          # 1st of each month, 00:00 UTC
+  workflow_dispatch:
+  release:
+    types: [published]
+  repository_dispatch:
+    types: [private-repo-commit]  # fired by the private source repo
+
+permissions:
+  contents: write                 # for the Contents API PUT
+
+# Serialize runs: two near-simultaneous triggers could otherwise read the same blob
+# sha and the second PUT would 409 (the Contents API uses optimistic concurrency),
+# losing that entry under set -e.
+concurrency:
+  group: heartbeat-log
+  cancel-in-progress: false
+
+jobs:
+  heartbeat:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Append a heartbeat entry (GitHub-signed via Contents API)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EVENT_NAME: ${{ github.event_name }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          PRIVATE_SHA: ${{ github.event.client_payload.sha }}
+        run: |
+          set -euo pipefail
+          CURRENT=$(gh api "/repos/${{ github.repository }}/contents/heartbeat.log" 2>/dev/null || echo '{}')
+          BLOB_SHA=$(printf '%s' "$CURRENT" | jq -r '.sha // empty')
+          # Only decode when the file exists. If it exists but won't decode, ABORT —
+          # never overwrite an existing log with a single fresh entry.
+          if [ -n "$BLOB_SHA" ]; then
+            CONTENT=$(printf '%s' "$CURRENT" | jq -r '.content' | base64 -d) \
+              || { echo "::error::could not decode existing heartbeat.log — aborting"; exit 1; }
+          else
+            CONTENT=""   # first run: file does not exist yet
+          fi
+
+          case "$EVENT_NAME" in
+            schedule)            KIND="monthly" ;;
+            workflow_dispatch)   KIND="manual" ;;
+            release)             KIND="release" ;;
+            repository_dispatch) KIND="commit" ;;
+            *)                   KIND="$EVENT_NAME" ;;
+          esac
+          TS=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+          if [ "$KIND" = "release" ]; then
+            ENTRY=$(jq -nc --arg ts "$TS" --arg kind "$KIND" --arg version "$RELEASE_TAG" \
+              '{ts:$ts, kind:$kind, version:$version}')
+          elif [ "$KIND" = "commit" ]; then
+            ENTRY=$(jq -nc --arg ts "$TS" --arg kind "$KIND" --arg sha "$PRIVATE_SHA" \
+              '{ts:$ts, kind:$kind, sha:$sha}')
+          else
+            ENTRY=$(jq -nc --arg ts "$TS" --arg kind "$KIND" '{ts:$ts, kind:$kind}')
+          fi
+
+          if [ -n "$CONTENT" ]; then NEW=$(printf '%s\n%s' "$CONTENT" "$ENTRY"); else NEW="$ENTRY"; fi
+          NEW_B64=$(printf '%s' "$NEW" | base64 -w 0)
+          echo "Appending: $ENTRY"
+
+          if [ -n "$BLOB_SHA" ]; then
+            gh api -X PUT "/repos/${{ github.repository }}/contents/heartbeat.log" \
+              -f message="heartbeat: ${EVENT_NAME}" -f content="$NEW_B64" -f sha="$BLOB_SHA" -f branch=main >/dev/null
+          else
+            gh api -X PUT "/repos/${{ github.repository }}/contents/heartbeat.log" \
+              -f message="heartbeat: ${EVENT_NAME}" -f content="$NEW_B64" -f branch=main >/dev/null
+          fi
+          echo "Heartbeat committed (GitHub-signed)."

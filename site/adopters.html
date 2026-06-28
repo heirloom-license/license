@@ -71,10 +71,11 @@
 </div>
 <footer>
   <div class="wrap">
-    Status is <strong>self-reported and cryptographically signed</strong> by each app's
-    own dead-man's switch, then signature-verified here — we confirm the switch is armed
-    and untampered, not the private source. A switch that stops reporting goes
-    <em>stale</em> rather than falsely green. Listings are self-submitted and badge-verified;
+    Status comes from each app's <strong>own public heartbeat</strong> — either a
+    cryptographically <strong>signed</strong> heartbeat we verify, or a <strong>public
+    maintenance log</strong> in the app's own public repo. Either way we
+    confirm the switch is reporting, not the private source. A switch that stops reporting
+    goes <em>stale</em> rather than falsely green. Listings are self-submitted and badge-verified;
     each app has a shareable link (the ⧉ on its card). Source of truth:
     <a href="https://github.com/heirloom-license/license/blob/main/adopters.yml">adopters.yml</a>
     · <a href="https://github.com/heirloom-license/license/blob/main/HEARTBEAT.md">how status works</a>.
@@ -90,17 +91,19 @@ function safeUrl(u){return /^https?:\/\//i.test(u||"")?String(u):"";}  // block 
 function host(u){try{return new URL(u).host.replace(/^www\./,"")+new URL(u).pathname.replace(/\/$/,"");}catch(e){return u;}}
 // Live status derived in-browser from the signed report facts — mirrors
 // scripts/poll_heartbeats.py derive_state(); see HEARTBEAT.md.
-const STALE_AFTER_DAYS=14, LOW_RUNWAY_DAYS=90;
+const STALE_AFTER_DAYS=14, STALE_AFTER_DAYS_LOG=45, LOW_RUNWAY_DAYS=90;
 function parseTs(s){const d=s?new Date(s):null;return d&&!isNaN(d)?d:null;}
 function deriveStatus(r){
-  if(!r||r.error||!r.sig_ok) return {state:"unknown"};
+  if(!r||r.error) return {state:"unknown"};
+  if(r.source==="signed"&&!r.sig_ok) return {state:"unknown"};
   if(r.sunset&&typeof r.sunset==="object") return {state:"sunset"};
   const now=new Date(),last=parseTs(r.last_signal),emitted=parseTs(r.emitted_at),dormancy=parseInt(r.dormancy_days,10);
   if(!last||!emitted||!Number.isFinite(dormancy)) return {state:"unknown"};
   if((emitted-now)/864e5>2||(last-now)/864e5>2) return {state:"unknown"};  // clock skew (mirror poller)
+  const staleAfter=r.source==="log"?STALE_AFTER_DAYS_LOG:STALE_AFTER_DAYS;
   const ageDays=(now-emitted)/864e5,daysSince=Math.floor((now-last)/864e5),runway=dormancy-daysSince;
   let state="active";
-  if(ageDays>STALE_AFTER_DAYS) state="stale";
+  if(ageDays>staleAfter) state="stale";
   else if(runway<=0) state="dormant";
   else if(runway<=LOW_RUNWAY_DAYS) state="low_runway";
   return {state,runwayDays:runway,daysSinceSignal:daysSince};
@@ -132,7 +135,12 @@ function card(a){
   const logo=safeUrl(a.logo)?`<img class="logo" src="${esc(a.logo)}" alt="">`:`<div class="logo">${esc(initials(a.name))}</div>`;
   const urlLine=url?`<a class="url" href="${esc(url)}" target="_blank" rel="noopener">${esc(host(url))} ↗</a>`:`<span class="url" style="color:var(--muted)">website coming soon</span>`;
   const verified=a.verified?`<span class="chip v">✓ verified</span>`:"";
-  const signed=(a.report&&a.report.sig_ok)?`<span class="chip sig" title="Signed by the app's own switch and signature-verified here.">self-reported · signed</span>`:"";
+  const rep=a.report;
+  const signed=(rep&&!rep.error&&rep.source==="signed"&&rep.sig_ok)
+      ? `<span class="chip sig" title="Signed by the app's own switch and signature-verified here.">self-reported · signed</span>`
+    : (rep&&!rep.error&&rep.source==="log")
+      ? `<span class="chip sig" title="Read from a public maintenance log in the app's own repo.">public log</span>`
+      : "";
   const upcoming=a.status==="upcoming"?`<span class="chip up">upcoming</span>`:"";
   const perma=`<a class="perma" href="#${esc(a.slug)}" title="Copy link to ${esc(a.name)}" aria-label="Permalink">⧉</a>`;
   return `<div class="card" id="${esc(a.slug)}">

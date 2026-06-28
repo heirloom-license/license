@@ -10,9 +10,24 @@ It implements the **Heartbeat Record** that the license already requires:
 > maintenance — including a new release, a commit to the Source Repository, or a
 > **signed heartbeat entry** — recorded at the Heartbeat Record location."*
 
-The switch publishes a small, **signed, public** file on every run. Heirloom polls
-it, verifies the signature, and renders the status. Nothing is pushed to a Heirloom
-server; there is no central service holding secrets.
+The adopter publishes a small, **public** heartbeat that Heirloom polls and renders.
+Nothing is pushed to a Heirloom server; there is no central service holding secrets.
+
+## Two heartbeat sources
+
+An adopter can report status either way — the directory supports both and labels which
+one each app uses:
+
+| Source | What you publish | Trust basis | Friction |
+|---|---|---|---|
+| **Public log** *(simplest)* | a public JSONL maintenance log (`heartbeat.log`) in your own repo, appended on each commit/release | provenance: the log lives in **your** public repo, with GitHub-verified commits | none beyond a public repo + a tiny workflow |
+| **Signed heartbeat** *(hardened)* | a detached-SSHSIG-signed `heartbeat.json` + `.sig` | cryptographic: an Ed25519 key **you** registered | a keypair + a repo secret |
+
+The **public log** removes the main adoption blocker (no keys, no secrets) and is the
+default for GitHub-hosted apps; the **signed** source suits non-GitHub hosting or
+adopters who want cryptographic self-report. Both are detailed below — the log in
+[Public log source](#public-log-source-simplest), the signed protocol in the sections
+after it.
 
 ---
 
@@ -30,11 +45,41 @@ does not pretend to. Concretely:
 - **What we do *not* assert:** independent confirmation of private commit history.
   A **Sunset** becomes independently verifiable once the repo is public.
 
-The directory labels every reported status `self-reported · signed` to keep this honest.
+The directory labels each app by source — `self-reported · signed` or `public log` — to
+keep this honest. For a **public log**, "attributable" means the log lives in the
+adopter's own public repo (with GitHub-verified commits), rather than carrying an SSHSIG;
+the same "we vouch for the report, not the private source" caveat applies.
 
 ---
 
-## Published artifacts
+## Public log source (simplest)
+
+Point the directory at a public **JSONL** log the adopter already maintains — one JSON
+object per line:
+
+```json
+{"ts":"2026-06-22T16:58:05Z","kind":"release","version":"v1.0.1"}
+{"ts":"2026-06-23T05:36:51Z","kind":"commit","sha":"613fe53"}
+```
+
+| `kind` | Meaning | Effect on status |
+|---|---|---|
+| `commit`, `release` | real maintenance work | sets **`last_signal`** (resets the dormancy clock) |
+| `monthly`, `manual` | a liveness ping (cron / by hand) | counts only toward **`emitted_at`** (mechanism is alive) |
+| `sunset` | terminal; include `public_repo_url` (https) + optional `date` | shows **Sunset**, links the now-public repo |
+
+The directory derives `last_signal` from the latest `commit`/`release` entry and
+`emitted_at` from the latest entry of **any** kind, so a stalled monthly cron alone can't
+keep an abandoned app looking armed. `dormancy_days` and `change_license` come from the
+adopter's registered **variant** (the log carries signals, not license parameters).
+Because the liveness cadence is typically monthly, the **stale** threshold for logs is
+45 days (vs 14 for the signed switch). Register only `heartbeat_url` (no `pubkey`) and
+the directory treats the source as a log. A reference publisher is in
+[`reference/.github/workflows/heartbeat-log.yml`](reference/.github/workflows/heartbeat-log.yml).
+
+---
+
+## Published artifacts (signed source)
 
 The switch publishes two files at a stable, public HTTPS location the adopter owns
 (a public `heirloom-heartbeat` repo, a gist, or a path on the product domain):
@@ -142,11 +187,12 @@ time so the countdown stays live between polls:
 
 ```yaml
 report:
-  sig_ok: true                          # signature verified against the registered pubkey
-  last_signal: '2026-06-22T14:03:00Z'   # from the verified payload — resets the dormancy clock
-  emitted_at: '2026-06-26T09:00:11Z'    # from the verified payload — switch liveness
-  dormancy_days: 365                    # from the verified payload
-  change_license: MPL-2.0               # from the verified payload
+  source: signed                        # "signed" (heartbeat.json) or "log" (heartbeat.log)
+  sig_ok: true                          # signed: verified against pubkey · log: null (n/a)
+  last_signal: '2026-06-22T14:03:00Z'   # resets the dormancy clock (signed payload / latest commit|release)
+  emitted_at: '2026-06-26T09:00:11Z'    # mechanism liveness (signed emit / latest log entry of any kind)
+  dormancy_days: 365                    # signed payload, or derived from the registered variant (log)
+  change_license: MPL-2.0               # signed payload, or derived from the variant (log)
   sunset: null                          # or { date, public_repo_url }
   error: null                           # reason the status is unavailable (⇒ state unknown)
 ```
@@ -169,7 +215,8 @@ same ladder; the poller itself records only facts). Constants:
 
 | Constant | Value | Rationale |
 |---|---|---|
-| `STALE_AFTER_DAYS` | 14 | Switch emits weekly; ~2 missed runs ⇒ we can't vouch. |
+| `STALE_AFTER_DAYS` | 14 | Signed switch emits weekly; ~2 missed runs ⇒ we can't vouch. |
+| `STALE_AFTER_DAYS_LOG` | 45 | A public log's liveness cadence is ~monthly (cron), so allow more. |
 | `LOW_RUNWAY_DAYS` | 90 | Mirrors the §4 good-faith support window. |
 | poll cadence | 6h | How often the directory refreshes. |
 
@@ -179,7 +226,7 @@ State resolution (first match wins):
 |---|---|---|
 | `unknown` | fetch failed, `sig_ok:false`, schema mismatch, future-dated stamp, or `state==sunset` without an https URL | ⚪ status unavailable |
 | `sunset` | `state==sunset` + `sunset` object present | ⚫ Sunset — open-sourced, links public repo |
-| `stale` | `now − emitted_at > STALE_AFTER_DAYS` | 🟠 no signal from switch since `emitted_at` |
+| `stale` | `now − emitted_at >` the source's stale window (signed 14d, log 45d) | 🟠 no signal from switch since `emitted_at` |
 | `dormant` | `runway_days ≤ 0` | 🔴 dormant — past the window |
 | `low_runway` | `runway_days ≤ LOW_RUNWAY_DAYS` | 🟡 armed — ~N days to Sunset |
 | `active` | otherwise | 🟢 armed — last signal Nd ago, ~N days runway |

@@ -83,36 +83,42 @@ trade-off. An expired token silently disables the switch — see Hardening.
 
 ## Step 4 — Turn on public status reporting
 
-This publishes a signed, public heartbeat so the
-[adopters directory](https://heirloomlicense.org/adopters) can show that your
-switch is armed — and implements the license's public **Heartbeat Record** (§4).
-See [`HEARTBEAT.md`](HEARTBEAT.md) for the full protocol.
+Publish a public heartbeat so the
+[adopters directory](https://heirloomlicense.org/adopters) shows your switch is armed —
+and you implement the license's public **Heartbeat Record** (§4). There are two ways;
+pick one. See [`HEARTBEAT.md`](HEARTBEAT.md) for the full protocol.
 
-Do these **in order** — the directory bot verifies your live heartbeat at submission
-time, so you must publish one *before* you list your app, or you'll be listed
-badge-only until you retry.
+### Option A — Public maintenance log (simplest, recommended)
 
-1. **Create a public heartbeat repo.** Make a new **public** repo named
-   `heirloom-heartbeat` in your account, initialized with a commit (a README is
-   fine). Make sure its **default branch is `main`** (the Heartbeat URL below points
-   at `main`; substitute your default branch if it differs). It holds only
-   `heartbeat.json` — it reveals nothing about your source.
-2. **Generate a signing key:**
-   ```sh
-   ssh-keygen -t ed25519 -N "" -C "heirloom-heartbeat" -f hb_key
-   ```
-   - Paste the contents of **`hb_key`** (the private key — keep the BEGIN/END lines
-     and all newlines) into a source-repo secret named `HEIRLOOM_HEARTBEAT_KEY`.
-   - Keep the line in **`hb_key.pub`** for step 4, then delete both files.
-3. **Publish the first heartbeat.** With Steps 2–3 (the switch + `HEIRLOOM_PAT`) and
-   the steps above done, run the switch by hand: **Actions ▸ Heirloom Dead-Man's
-   Switch ▸ Run workflow**. Confirm `heartbeat.json` and `heartbeat.json.sig` now
-   exist in your `heirloom-heartbeat` repo.
-4. **List your app.** [Submit the adopter form](https://github.com/heirloom-license/license/issues/new?template=adopter-submission.yml)
-   with your **Heartbeat URL**
-   (`https://raw.githubusercontent.com/<you>/heirloom-heartbeat/main/heartbeat.json`)
-   and the **public key** from `hb_key.pub`. The bot verifies the signature and
-   opens a PR; the directory then polls and shows your live status.
+No keys, no secrets. You keep a public JSONL `heartbeat.log` in a repo you own, appended
+on every commit/release; the directory reads it.
+
+1. Create a **public** repo you own (e.g. `<you>/<app>-public`, default branch `main`).
+2. Add [`reference/.github/workflows/heartbeat-log.yml`](reference/.github/workflows/heartbeat-log.yml)
+   to it (the log appender — monthly cron + manual + release + commit dispatch).
+3. In your **private** source repo, add
+   [`reference/.github/workflows/heartbeat-dispatch.yml`](reference/.github/workflows/heartbeat-dispatch.yml),
+   set `PUBLIC_REPO`, and add a `HEARTBEAT_DISPATCH_TOKEN` secret (a PAT scoped to the
+   public repo, Contents: R/W). Push once to seed the log.
+4. [List your app](https://github.com/heirloom-license/license/issues/new?template=adopter-submission.yml)
+   with **Heartbeat URL** = `https://raw.githubusercontent.com/<you>/<app>-public/main/heartbeat.log`
+   and **no public key**. Leave the dormancy window to your **variant**.
+
+### Option B — Signed heartbeat (hardened; non-GitHub hosting or cryptographic self-report)
+
+The dead-man's switch (Step 2) signs and publishes a `heartbeat.json`. Do these **in
+order** — the bot verifies your live heartbeat at submission, so publish one first.
+
+1. Create a **public** repo named `heirloom-heartbeat` (default branch `main`), holding
+   only `heartbeat.json`. It reveals nothing about your source.
+2. Generate a signing key: `ssh-keygen -t ed25519 -N "" -C "heirloom-heartbeat" -f hb_key`.
+   Paste `hb_key` (private — keep the BEGIN/END lines and newlines) into the source-repo
+   secret `HEIRLOOM_HEARTBEAT_KEY`; keep `hb_key.pub` for step 4; then delete both files.
+3. Publish the first heartbeat: run the switch by hand (**Actions ▸ Heirloom Dead-Man's
+   Switch ▸ Run workflow**); confirm `heartbeat.json` + `.sig` appear in the repo.
+4. [List your app](https://github.com/heirloom-license/license/issues/new?template=adopter-submission.yml)
+   with **Heartbeat URL** = `https://raw.githubusercontent.com/<you>/heirloom-heartbeat/main/heartbeat.json`
+   and the **public key** from `hb_key.pub`. The bot verifies the signature and opens a PR.
 
 ## Step 5 — Keep it alive
 

@@ -27,8 +27,13 @@ ALLOW_FILE = os.environ.get("HEIRLOOM_ALLOW_FILE") == "1"   # file:// — tests 
 
 # Thresholds for the derived state. Mirrored in adopters.html (JS) and used by
 # build_adopters.py for the static ADOPTERS.md snapshot. Keep all three in sync.
-STALE_AFTER_DAYS = 14    # switch emits weekly; ~2 missed runs ⇒ can't vouch
-LOW_RUNWAY_DAYS = 90    # mirrors the §4 good-faith support window
+STALE_AFTER_DAYS = 14        # signed switch emits weekly; ~2 missed runs ⇒ can't vouch
+STALE_AFTER_DAYS_LOG = 45    # a public log's liveness cadence is ~monthly (cron), so allow more
+LOW_RUNWAY_DAYS = 90        # mirrors the §4 good-faith support window
+
+# Map a variant id (HL-1.0-MPL2.0-12mo) to its license params, for log-sourced
+# adopters whose public log carries signals but not dormancy/change-license.
+_CL_MAP = {"MPL2.0": "MPL-2.0", "GPL3.0": "GPL-3.0-or-later", "AGPL3.0": "AGPL-3.0-or-later"}
 
 _PUBKEY_RE = re.compile(
     r'^(ssh-ed25519|ssh-rsa|ecdsa-sha2-nistp(?:256|384|521))'
@@ -112,23 +117,42 @@ def verify_sig(slug, pubkey, payload_bytes, sig_bytes):
         return p.returncode == 0, p.stderr.decode("utf-8", "ignore").strip()
 
 
+def variant_params(variant):
+    """(dormancy_days, change_license) from a variant id like HL-1.0-MPL2.0-12mo."""
+    m = re.match(r'HL-1\.0-([A-Za-z0-9.]+)-([1-9]\d*)mo$', (variant or "").strip())
+    if not m:
+        return None, None
+    return round(int(m.group(2)) * 365 / 12), _CL_MAP.get(m.group(1), m.group(1))
+
+def _base_report():
+    return {"source": None, "sig_ok": None, "last_signal": None, "emitted_at": None,
+            "dormancy_days": None, "change_license": None, "sunset": None, "error": None}
+
+def _future(times, now):
+    horizon = now + datetime.timedelta(days=FUTURE_TOLERANCE_DAYS)
+    return any(t > horizon for t in times)
+
 def poll_one(a, now):
-    """Fetch + verify one adopter's heartbeat; return a facts report (never raises)."""
-    slug = a.get("slug") or slugify(a.get("name", ""))
-    rep = {"sig_ok": False, "last_signal": None, "emitted_at": None,
-           "dormancy_days": None, "change_license": None, "sunset": None, "error": None}
+    """Fetch one adopter's heartbeat and return a facts report (never raises). A
+    registered pubkey ⇒ the hardened signed-JSON source; otherwise a public
+    maintenance log (simplest, provenance-trusted). See HEARTBEAT.md."""
+    rep = _base_report()
     url = a.get("heartbeat_url")
-    pubkey = a.get("pubkey")
-    if not url or not pubkey:
-        rep["error"] = "no heartbeat_url/pubkey registered"; return rep
-    if not valid_pubkey(pubkey):
+    if not url:
+        rep["error"] = "no heartbeat_url registered"; return rep
+    return _poll_signed(a, url, now, rep) if a.get("pubkey") else _poll_log(a, url, now, rep)
+
+def _poll_signed(a, url, now, rep):
+    """Hardened source: a detached-SSHSIG-signed heartbeat.json verified against pubkey."""
+    rep["source"] = "signed"; rep["sig_ok"] = False
+    slug = a.get("slug") or slugify(a.get("name", ""))
+    if not valid_pubkey(a.get("pubkey")):
         rep["error"] = "registered pubkey is malformed"; return rep
     try:
-        payload = fetch(url)
-        sig = fetch(url + ".sig")
+        payload = fetch(url); sig = fetch(url + ".sig")
     except Exception as e:
         rep["error"] = f"fetch failed: {e}"; return rep
-    ok, msg = verify_sig(slug, pubkey, payload, sig)
+    ok, msg = verify_sig(slug, a["pubkey"], payload, sig)
     rep["sig_ok"] = ok
     if not ok:
         rep["error"] = f"signature verification failed: {msg or 'mismatch'}"; return rep
@@ -139,38 +163,75 @@ def poll_one(a, now):
     schema = str(hb.get("schema") or "")
     if schema != SCHEMA_MAJOR and not schema.startswith(SCHEMA_MAJOR + "."):
         rep["error"] = f"unsupported schema: {hb.get('schema')!r}"; return rep
-    if hb.get("app") != slug:    # app is mandatory and binds the heartbeat to this entry
+    if hb.get("app") != slug:
         rep["error"] = f"app mismatch: heartbeat app={hb.get('app')!r}, entry slug={slug!r}"; return rep
     try:
-        last = parse_ts(hb["last_signal"])
-        emitted = parse_ts(hb["emitted_at"])
+        last = parse_ts(hb["last_signal"]); emitted = parse_ts(hb["emitted_at"])
         dormancy = int(hb["dormancy_days"])
     except Exception as e:
         rep["error"] = f"bad/missing required field: {e}"; return rep
-    horizon = now + datetime.timedelta(days=FUTURE_TOLERANCE_DAYS)
-    if last > horizon or emitted > horizon:
+    if _future([last, emitted], now):
         rep["error"] = "timestamp is in the future (clock skew)"; return rep
-    # Sunset is recorded ONLY when state==sunset AND the payload (adopter-signed,
-    # so attacker-influenceable) carries an https public_repo_url — this is what
-    # the directory turns into a clickable link, so the scheme is enforced here.
     sunset_obj = None
-    if hb.get("state") == "sunset":
+    if hb.get("state") == "sunset":   # only a declared Sunset, with an https repo url, becomes a link
         so = hb.get("sunset")
-        url = so.get("public_repo_url") if isinstance(so, dict) else None
-        if not (isinstance(url, str) and url.startswith("https://")):
-            rep["error"] = "state=sunset but sunset.public_repo_url is missing or not https"
-            return rep
-        sunset_obj = {"date": (str(so["date"]) if so.get("date") is not None else None),
-                      "public_repo_url": url}
+        surl = so.get("public_repo_url") if isinstance(so, dict) else None
+        if not (isinstance(surl, str) and surl.startswith("https://")):
+            rep["error"] = "state=sunset but sunset.public_repo_url is missing or not https"; return rep
+        sunset_obj = {"date": (str(so["date"]) if so.get("date") is not None else None), "public_repo_url": surl}
     cl = hb.get("change_license")
     rep.update(last_signal=iso_z(last), emitted_at=iso_z(emitted), dormancy_days=dormancy,
                change_license=(str(cl) if cl is not None else None), sunset=sunset_obj)
     return rep
 
+def _poll_log(a, url, now, rep):
+    """Simple source: a public JSONL maintenance log (e.g. memophant-public/heartbeat.log).
+    Trust is provenance-based — the log lives in the adopter's own public repo (no SSHSIG).
+    last_signal = latest commit/release entry (real work); emitted_at = latest entry of any
+    kind (mechanism liveness); dormancy/change-license come from the registered variant."""
+    rep["source"] = "log"
+    try:
+        raw = fetch(url, max_bytes=1_000_000).decode("utf-8", "ignore")
+    except Exception as e:
+        rep["error"] = f"fetch failed: {e}"; return rep
+    horizon = now + datetime.timedelta(days=FUTURE_TOLERANCE_DAYS)
+    work, latest_any, sunset_obj = [], None, None
+    for line in raw.splitlines():
+        if not line.strip():
+            continue
+        try:
+            ent = json.loads(line)
+            t = parse_ts(ent.get("ts"))
+        except Exception:
+            continue   # skip non-JSON / undated lines rather than aborting the whole log
+        if t > horizon:
+            continue   # skip a single clock-skewed/future line rather than failing the report
+        latest_any = t if latest_any is None or t > latest_any else latest_any
+        if ent.get("kind") in ("commit", "release"):
+            work.append(t)
+        elif ent.get("kind") == "sunset" and isinstance(ent.get("public_repo_url"), str) \
+                and ent["public_repo_url"].startswith("https://"):
+            sunset_obj = {"date": (str(ent["date"]) if ent.get("date") is not None else None),
+                          "public_repo_url": ent["public_repo_url"]}
+    if latest_any is None:
+        rep["error"] = "heartbeat log has no usable entries"; return rep
+    dormancy, cl = variant_params(a.get("variant"))
+    if dormancy is None:
+        rep["error"] = f"cannot derive dormancy window from variant {a.get('variant')!r}"; return rep
+    # Liveness pings alone (monthly/manual) are NOT a maintenance signal — without a
+    # commit/release (or a terminal sunset) we can't vouch that the app is armed.
+    if not work and not sunset_obj:
+        rep["error"] = "no commit/release maintenance signal in log"; return rep
+    rep.update(last_signal=iso_z(max(work) if work else latest_any), emitted_at=iso_z(latest_any),
+               dormancy_days=dormancy, change_license=cl, sunset=sunset_obj)
+    return rep
+
 
 def derive_state(rep, now):
-    """Display state from a verified facts report. MIRRORED in adopters.html — keep in sync."""
-    if not rep or rep.get("error") or not rep.get("sig_ok"):
+    """Display state from a facts report. MIRRORED in adopters.html — keep in sync."""
+    if not rep or rep.get("error"):
+        return "unknown"
+    if rep.get("source") == "signed" and not rep.get("sig_ok"):
         return "unknown"
     if isinstance(rep.get("sunset"), dict):
         return "sunset"                                 # terminal — outranks staleness
@@ -179,10 +240,10 @@ def derive_state(rep, now):
         dormancy = int(rep["dormancy_days"])
     except Exception:
         return "unknown"
-    if (emitted - now).total_seconds() / 86400.0 > FUTURE_TOLERANCE_DAYS \
-            or (last - now).total_seconds() / 86400.0 > FUTURE_TOLERANCE_DAYS:
-        return "unknown"   # clock skew — mirror poll_one()
-    if (now - emitted).total_seconds() / 86400.0 > STALE_AFTER_DAYS:
+    if _future([last, emitted], now):
+        return "unknown"   # clock skew
+    stale_after = STALE_AFTER_DAYS_LOG if rep.get("source") == "log" else STALE_AFTER_DAYS
+    if (now - emitted).total_seconds() / 86400.0 > stale_after:
         return "stale"
     runway = dormancy - int((now - last).total_seconds() // 86400)
     if runway <= 0:
@@ -212,15 +273,14 @@ def main():
         try:
             rep = poll_one(a, now)
         except Exception as e:   # defense in depth: one bad entry must not abort the run
-            rep = {"sig_ok": False, "last_signal": None, "emitted_at": None,
-                   "dormancy_days": None, "change_license": None, "sunset": None,
-                   "error": f"internal error: {e}"}
+            rep = _base_report(); rep["error"] = f"internal error: {e}"
         if a.get("report") != rep:
             a["report"] = rep; changed += 1
         state = derive_state(rep, now)
-        detail = f"runway≈{rep['dormancy_days'] - int((now - parse_ts(rep['last_signal'])).total_seconds()//86400)}d" \
-            if (rep["sig_ok"] and rep["last_signal"]) else f"({rep['error']})"
-        print(f"  {'✓' if rep['sig_ok'] else '✗'} {str(a.get('name','?')):<20} {state:<10} {detail}")
+        ok = not rep.get("error")
+        detail = (f"runway≈{rep['dormancy_days'] - int((now - parse_ts(rep['last_signal'])).total_seconds()//86400)}d"
+                  if (ok and rep.get("last_signal")) else f"({rep['error']})")
+        print(f"  {'✓' if ok else '✗'} {str(a.get('name','?')):<18} [{rep.get('source') or '-'}] {state:<10} {detail}")
     data["adopters"] = adopters
     path.write_text(yaml.safe_dump(data, sort_keys=False, allow_unicode=True))
     print(f"Polled {reporting} reporting adopter(s); "
