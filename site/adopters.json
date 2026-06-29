@@ -11,7 +11,7 @@
       "logo": "",
       "added": "2026-06-02",
       "status": "live",
-      "verified": false,
+      "verified": true,
       "heartbeat_url": "https://raw.githubusercontent.com/awizemann/memophant-public/main/heartbeat.log",
       "report": {
         "source": "log",
