@@ -33,9 +33,10 @@
   .chip.v{color:var(--accent2);border-color:var(--accent)}
   .chip.up{color:#d2a23b;border-color:#5a4a1f}
   .chip.sig{color:var(--accent2);border-color:var(--accent)}
-  .status{display:flex;align-items:center;gap:7px;font-size:13px;margin-top:2px;color:var(--ink)}
+  .status{display:flex;align-items:flex-start;gap:7px;font-size:13px;line-height:1.45;margin-top:2px;color:var(--ink)}
+  .status .txt{min-width:0}
   .status .muted2{color:var(--muted)}
-  .dot{width:9px;height:9px;border-radius:50%;flex:0 0 auto}
+  .dot{width:9px;height:9px;border-radius:50%;flex:0 0 auto;margin-top:5px}
   .dot.active{background:#1f9d63;box-shadow:0 0 0 3px rgba(31,157,99,.18)}
   .dot.low_runway{background:#d2a23b;box-shadow:0 0 0 3px rgba(210,162,59,.18)}
   .dot.dormant{background:#e5534b;box-shadow:0 0 0 3px rgba(229,83,75,.18)}
@@ -89,6 +90,9 @@ function initials(n){return String(n||"").trim().split(/\s+/).map(w=>w[0]||"").j
 function esc(s){return String(s==null?"":s).replace(/[&<>"'`]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;","`":"&#96;"}[c]));}
 function safeUrl(u){return /^https?:\/\//i.test(u||"")?String(u):"";}  // block javascript:/data: in href/src
 function host(u){try{return new URL(u).host.replace(/^www\./,"")+new URL(u).pathname.replace(/\/$/,"");}catch(e){return u;}}
+// Favicon of the adopter's own product site (resolves the live <link rel=icon>),
+// with a graceful fall back to initials on error.
+function faviconUrl(a){try{const h=new URL(a.product_url||a.repo||"").hostname;return h?`https://icons.duckduckgo.com/ip3/${h}.ico`:"";}catch(e){return "";}}
 // Live status derived in-browser from the signed report facts — mirrors
 // scripts/poll_heartbeats.py derive_state(); see HEARTBEAT.md.
 const STALE_AFTER_DAYS=14, STALE_AFTER_DAYS_LOG=45, LOW_RUNWAY_DAYS=90;
@@ -126,13 +130,18 @@ function statusRow(a){
     else if(s.state==="dormant") detail=`${Math.abs(s.runwayDays)}d past window`;
     body=`<span>${labels[s.state]||"Status unavailable"}</span>${detail?` <span class="muted2">· ${esc(detail)}</span>`:""}`;
   }
-  return `<div class="status" title="${esc(tips[s.state]||"")}"><span class="dot ${s.state}" aria-hidden="true"></span>${body}</div>`;
+  return `<div class="status" title="${esc(tips[s.state]||"")}"><span class="dot ${s.state}" aria-hidden="true"></span><span class="txt">${body}</span></div>`;
 }
 function card(a){
   const url=safeUrl(a.product_url||a.repo||"");
   const nm=a.name||"(unnamed)";
   const name=url?`<a href="${esc(url)}" target="_blank" rel="noopener">${esc(nm)}</a>`:esc(nm);
-  const logo=safeUrl(a.logo)?`<img class="logo" src="${esc(a.logo)}" alt="">`:`<div class="logo">${esc(initials(a.name))}</div>`;
+  const ic=esc(initials(a.name));
+  const onerr=`this.replaceWith(Object.assign(document.createElement('div'),{className:'logo',textContent:this.dataset.i}))`;
+  const src=safeUrl(a.logo)||faviconUrl(a);
+  const logo=src
+    ? `<img class="logo" src="${esc(src)}" alt="" loading="lazy" data-i="${ic}" onerror="${onerr}">`
+    : `<div class="logo">${ic}</div>`;
   const urlLine=url?`<a class="url" href="${esc(url)}" target="_blank" rel="noopener">${esc(host(url))} ↗</a>`:`<span class="url" style="color:var(--muted)">website coming soon</span>`;
   const verified=a.verified?`<span class="chip v">✓ verified</span>`:"";
   const rep=a.report;
