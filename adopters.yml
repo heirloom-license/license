@@ -14,8 +14,8 @@ adopters:
   report:
     source: log
     sig_ok: null
-    last_signal: '2026-08-25T22:19:49Z'
-    emitted_at: '2026-08-25T22:19:49Z'
+    last_signal: '2026-08-26T20:32:27Z'
+    emitted_at: '2026-08-26T20:32:27Z'
     dormancy_days: 365
     change_license: MPL-2.0
     sunset: null
