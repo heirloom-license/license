@@ -1,5 +1,5 @@
 {
-  "updated": "2026-09-04T12:37:12Z",
+  "updated": "2026-09-04T23:45:21Z",
   "count": 1,
   "adopters": [
     {
@@ -16,8 +16,8 @@
       "report": {
         "source": "log",
         "sig_ok": null,
-        "last_signal": "2026-09-04T12:37:12Z",
-        "emitted_at": "2026-09-04T12:37:12Z",
+        "last_signal": "2026-09-04T23:45:21Z",
+        "emitted_at": "2026-09-04T23:45:21Z",
         "dormancy_days": 365,
         "change_license": "MPL-2.0",
         "sunset": null,
